@@ -1,0 +1,20 @@
+# Xcode
+.DS_Store
+build/
+build_release/
+*.derivedData
+*.xcuserstate
+*.xcuserdata
+*.swp
+
+# Build artifacts
+*.app
+*.dSYM
+
+# Local
+.idea/
+.vscode/
+
+# Swift Package Manager
+.build/
+Packages/
