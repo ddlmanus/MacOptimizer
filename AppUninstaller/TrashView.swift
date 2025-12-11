@@ -24,12 +24,19 @@ class TrashScanner: ObservableObject {
     @Published var items: [TrashItem] = []
     @Published var isScanning = false
     @Published var totalSize: Int64 = 0
+    @Published var needsPermission = false
     
     private let fileManager = FileManager.default
     private let trashURL: URL
     
     init() {
-        trashURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        // 使用系统 API 获取正确的废纸篓路径
+        if let trashURLs = try? fileManager.url(for: .trashDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
+            trashURL = trashURLs
+        } else {
+            // 回退到传统路径
+            trashURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        }
     }
     
     func scan() async {
@@ -37,13 +44,17 @@ class TrashScanner: ObservableObject {
             isScanning = true
             items = []
             totalSize = 0
+            needsPermission = false
         }
         
         var scannedItems: [TrashItem] = []
         var total: Int64 = 0
         
+        // 首先尝试直接访问 (需要 Full Disk Access)
+        var hasAccess = false
         do {
             let contents = try fileManager.contentsOfDirectory(at: trashURL, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey])
+            hasAccess = true
             
             for fileURL in contents {
                 let size = calculateSize(at: fileURL)
@@ -59,7 +70,21 @@ class TrashScanner: ObservableObject {
                 total += size
             }
         } catch {
-            print("Error scanning trash: \(error)")
+            print("Direct access failed: \(error)")
+        }
+        
+        // 如果直接访问失败，尝试使用 shell 命令
+        if !hasAccess {
+            let result = await scanWithShell()
+            scannedItems = result.items
+            total = result.total
+            
+            // 如果 shell 也没有结果，说明需要权限
+            if scannedItems.isEmpty {
+                await MainActor.run {
+                    needsPermission = true
+                }
+            }
         }
         
         let sortedItems = scannedItems.sorted { $0.size > $1.size }
@@ -70,6 +95,84 @@ class TrashScanner: ObservableObject {
             self.totalSize = finalTotal
             self.isScanning = false
         }
+    }
+    
+    func openSystemPreferences() {
+        // 打开系统设置的隐私与安全性 - 完全磁盘访问权限
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+    
+    private func scanWithShell() async -> (items: [TrashItem], total: Int64) {
+        var scannedItems: [TrashItem] = []
+        var total: Int64 = 0
+        
+        // 使用 AppleScript 通过 Finder 获取废纸篓内容
+        let script = """
+        tell application "Finder"
+            set trashItems to items of trash
+            set output to ""
+            repeat with anItem in trashItems
+                set itemPath to POSIX path of (anItem as alias)
+                set itemName to name of anItem
+                try
+                    set itemSize to size of anItem
+                on error
+                    set itemSize to 0
+                end try
+                set output to output & itemPath & "|||" & itemName & "|||" & itemSize & "\\n"
+            end repeat
+            return output
+        end tell
+        """
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                let lines = output.components(separatedBy: "\n")
+                for line in lines {
+                    guard !line.isEmpty else { continue }
+                    
+                    let parts = line.components(separatedBy: "|||")
+                    guard parts.count >= 3 else { continue }
+                    
+                    let path = parts[0].trimmingCharacters(in: .whitespaces)
+                    let name = parts[1].trimmingCharacters(in: .whitespaces)
+                    let sizeStr = parts[2].trimmingCharacters(in: .whitespacesAndNewlines)
+                    let size = Int64(sizeStr) ?? 0
+                    
+                    let fileURL = URL(fileURLWithPath: path)
+                    
+                    // 获取修改日期
+                    let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                    
+                    let item = TrashItem(
+                        url: fileURL,
+                        name: name,
+                        size: size,
+                        dateDeleted: date
+                    )
+                    scannedItems.append(item)
+                    total += size
+                }
+            }
+        } catch {
+            print("AppleScript scan failed: \(error)")
+        }
+        
+        return (scannedItems, total)
     }
     
     func emptyTrash() async -> Int64 {
@@ -139,6 +242,42 @@ struct TrashView: View {
                 Text("正在扫描废纸篓...")
                     .foregroundColor(.secondaryText)
                     .padding(.top, 8)
+                Spacer()
+            } else if scanner.needsPermission {
+                // 需要权限
+                Spacer()
+                VStack(spacing: 20) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 64))
+                        .foregroundColor(.orange.opacity(0.6))
+                    Text("需要访问权限")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white.opacity(0.9))
+                    Text("查看废纸篓内容需要「完全磁盘访问权限」")
+                        .font(.subheadline)
+                        .foregroundColor(.tertiaryText)
+                        .multilineTextAlignment(.center)
+                    
+                    Button(action: { scanner.openSystemPreferences() }) {
+                        HStack {
+                            Image(systemName: "gearshape")
+                            Text("授权访问")
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.8))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                    
+                    Text("授权后点击「刷新」按钮")
+                        .font(.caption)
+                        .foregroundColor(.tertiaryText)
+                }
+                .padding()
                 Spacer()
             } else if scanner.items.isEmpty {
                 Spacer()

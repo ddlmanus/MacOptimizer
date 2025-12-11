@@ -70,17 +70,6 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
 ---
 
 ## 📸 界面预览
-<img width="2924" height="1678" alt="image" src="https://github.com/user-attachments/assets/91dc5f0c-c64a-4fca-b67c-90a87464c29e" />
-
-<img width="2912" height="1672" alt="image" src="https://github.com/user-attachments/assets/e9f19bae-76a6-43e6-bb8b-9a2f4873b005" />
-<img width="2920" height="1690" alt="image" src="https://github.com/user-attachments/assets/a6342790-f6bb-4758-8b43-ed654f7a1eaf" />
-
-
-<img width="2934" height="1668" alt="image" src="https://github.com/user-attachments/assets/edd42d3b-8174-42b4-9827-013124db9bb5" />
-<img width="2920" height="1690" alt="image" src="https://github.com/user-attachments/assets/5cceffd6-3bab-4ea3-aab4-459c47ee9a25" />
-![Uploading image.png…]()
-
-
 
 应用采用类似 **CleanMyMac X** 的现代化深色主题设计,每个功能模块都有独特的渐变色背景:
 
