@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NavigationSidebar: View {
     @Binding var selectedModule: AppModule
+    @ObservedObject var localization = LocalizationManager.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,9 +24,28 @@ struct NavigationSidebar: View {
                         .font(.system(size: 16, weight: .bold))
                 }
                 
-                Text("Mac优化大师")
+                Text(localization.currentLanguage == .chinese ? "Mac优化大师" : "MacOptimizer")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
+                
+                Spacer()
+                
+                // 语言切换按钮
+                Button(action: { localization.toggleLanguage() }) {
+                    HStack(spacing: 4) {
+                        Text(localization.currentLanguage.flag)
+                            .font(.system(size: 14))
+                        Image(systemName: "globe")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help(L("switch_language"))
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
@@ -37,7 +57,8 @@ struct NavigationSidebar: View {
                         SidebarButton(
                             module: module,
                             isSelected: selectedModule == module,
-                            action: { selectedModule = module }
+                            action: { selectedModule = module },
+                            localization: localization
                         )
                     }
                 }
@@ -48,7 +69,7 @@ struct NavigationSidebar: View {
             
             // 底部信息
             VStack(alignment: .leading, spacing: 4) {
-                Text("v2.0.0")
+                Text("v2.1.0")
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.3))
                 Text("Pro Version")
@@ -72,7 +93,22 @@ struct SidebarButton: View {
     let module: AppModule
     let isSelected: Bool
     let action: () -> Void
+    @ObservedObject var localization: LocalizationManager
     @State private var isHovering = false
+    
+    // 获取本地化的模块名称
+    private var localizedName: String {
+        switch module {
+        case .monitor: return localization.L("monitor")
+        case .uninstaller: return localization.L("uninstaller")
+        case .deepClean: return localization.L("deepClean")
+        case .cleaner: return localization.L("cleaner")
+        case .optimizer: return localization.L("optimizer")
+        case .largeFiles: return localization.L("largeFiles")
+        case .fileExplorer: return localization.L("fileExplorer")
+        case .trash: return localization.L("trash")
+        }
+    }
     
     var body: some View {
         Button(action: action) {
@@ -90,7 +126,7 @@ struct SidebarButton: View {
                 }
                 .frame(width: 28)
                 
-                Text(module.rawValue)
+                Text(localizedName)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? .white : .white.opacity(0.7))
                 

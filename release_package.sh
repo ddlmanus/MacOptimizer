@@ -33,6 +33,7 @@ SOURCE_DIR="AppUninstaller"
 # 源文件列表
 SWIFT_FILES=(
     "${SOURCE_DIR}/Models.swift"
+    "${SOURCE_DIR}/LocalizationManager.swift"
     "${SOURCE_DIR}/AppScanner.swift"
     "${SOURCE_DIR}/ResidualFileScanner.swift"
     "${SOURCE_DIR}/FileRemover.swift"

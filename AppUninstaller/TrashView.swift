@@ -222,6 +222,7 @@ class TrashScanner: ObservableObject {
 
 struct TrashView: View {
     @StateObject private var scanner = TrashScanner()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var showEmptyConfirmation = false
     
     var body: some View {
@@ -239,7 +240,7 @@ struct TrashView: View {
                 Spacer()
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("正在扫描废纸篓...")
+                Text(loc.currentLanguage == .chinese ? "正在扫描废纸篓..." : "Scanning Trash...")
                     .foregroundColor(.secondaryText)
                     .padding(.top, 8)
                 Spacer()
@@ -250,11 +251,11 @@ struct TrashView: View {
                     Image(systemName: "lock.shield")
                         .font(.system(size: 64))
                         .foregroundColor(.orange.opacity(0.6))
-                    Text("需要访问权限")
+                    Text(loc.currentLanguage == .chinese ? "需要访问权限" : "Permission Required")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.white.opacity(0.9))
-                    Text("查看废纸篓内容需要「完全磁盘访问权限」")
+                    Text(loc.currentLanguage == .chinese ? "查看废纸篓内容需要「完全磁盘访问权限」" : "Full Disk Access is required to view Trash contents")
                         .font(.subheadline)
                         .foregroundColor(.tertiaryText)
                         .multilineTextAlignment(.center)
@@ -262,7 +263,7 @@ struct TrashView: View {
                     Button(action: { scanner.openSystemPreferences() }) {
                         HStack {
                             Image(systemName: "gearshape")
-                            Text("授权访问")
+                            Text(loc.currentLanguage == .chinese ? "授权访问" : "Grant Access")
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
@@ -273,7 +274,7 @@ struct TrashView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 8)
                     
-                    Text("授权后点击「刷新」按钮")
+                    Text(loc.currentLanguage == .chinese ? "授权后点击「刷新」按钮" : "Click Refresh after granting access")
                         .font(.caption)
                         .foregroundColor(.tertiaryText)
                 }
@@ -285,10 +286,10 @@ struct TrashView: View {
                     Image(systemName: "trash")
                         .font(.system(size: 64))
                         .foregroundColor(.white.opacity(0.2))
-                    Text("废纸篓为空")
+                    Text(loc.L("trash_empty"))
                         .font(.title2)
                         .foregroundColor(.white.opacity(0.5))
-                    Text("已删除的文件会显示在这里")
+                    Text(loc.currentLanguage == .chinese ? "已删除的文件会显示在这里" : "Deleted files will appear here")
                         .font(.subheadline)
                         .foregroundColor(.tertiaryText)
                 }
@@ -315,24 +316,24 @@ struct TrashView: View {
         .onAppear {
             Task { await scanner.scan() }
         }
-        .confirmationDialog("清空废纸篓", isPresented: $showEmptyConfirmation) {
-            Button("清空废纸篓", role: .destructive) {
+        .confirmationDialog(loc.L("empty_trash"), isPresented: $showEmptyConfirmation) {
+            Button(loc.L("empty_trash"), role: .destructive) {
                 Task { await scanner.emptyTrash() }
             }
-            Button("取消", role: .cancel) {}
+            Button(loc.L("cancel"), role: .cancel) {}
         } message: {
-            Text("此操作不可撤销，所有文件将被永久删除。")
+            Text(loc.currentLanguage == .chinese ? "此操作不可撤销，所有文件将被永久删除。" : "This cannot be undone. All files will be permanently deleted.")
         }
     }
     
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("废纸篓")
+                Text(loc.L("trash"))
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
-                Text("查看并管理已删除的文件")
+                Text(loc.currentLanguage == .chinese ? "查看并管理已删除的文件" : "View and manage deleted files")
                     .foregroundColor(.white.opacity(0.7))
             }
             
@@ -341,7 +342,7 @@ struct TrashView: View {
             Button(action: { Task { await scanner.scan() } }) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
-                    Text("刷新")
+                    Text(loc.L("refresh"))
                 }
                 .font(.caption)
                 .foregroundColor(.secondaryText)
@@ -357,10 +358,10 @@ struct TrashView: View {
     private var footerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(scanner.items.count) 个项目")
+                Text(loc.currentLanguage == .chinese ? "\(scanner.items.count) 个项目" : "\(scanner.items.count) items")
                     .font(.headline)
                     .foregroundColor(.white)
-                Text("共 \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
+                Text(loc.currentLanguage == .chinese ? "共 \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))" : "Total: \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
                     .font(.subheadline)
                     .foregroundColor(.secondaryText)
             }
@@ -370,7 +371,7 @@ struct TrashView: View {
             Button(action: { showEmptyConfirmation = true }) {
                 HStack {
                     Image(systemName: "trash.slash")
-                    Text("清空废纸篓")
+                    Text(loc.L("empty_trash"))
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)

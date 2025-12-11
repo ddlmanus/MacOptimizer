@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="generated_icon.png" width="128" height="128" alt="Mac优化大师 Logo">
+  <img src="generated_icon.png" width="128" height="128" alt="MacOptimizer Logo">
 </p>
 
-<h1 align="center">Mac优化大师 (MacOptimizer)</h1>
+<h1 align="center">MacOptimizer</h1>
 
 <p align="center">
-  <strong>🚀 一款功能强大的 macOS 系统优化与应用管理工具</strong>
+  <strong>🚀 A Powerful macOS System Optimization and App Management Tool</strong>
 </p>
 
 <p align="center">
@@ -13,16 +13,248 @@
   <img src="https://img.shields.io/badge/Swift-5.9-orange.svg" alt="Swift">
   <img src="https://img.shields.io/badge/SwiftUI-4.0-purple.svg" alt="SwiftUI">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/version-2.1.0-brightgreen.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.2.0-brightgreen.svg" alt="Version">
+  <img src="https://img.shields.io/badge/i18n-EN%20%7C%20中文-cyan.svg" alt="i18n">
 </p>
 
 ---
 
+## ✨ Features
+
+MacOptimizer is a system optimization tool designed specifically for macOS, featuring a modern SwiftUI interface with eight core functional modules:
+
+### 🌐 Multi-Language Support (New!)
+- **Chinese & English** - Switch between languages with one click
+- **Persistent Settings** - Language preference is saved automatically
+- **Full Coverage** - All UI elements support localization
+
+### 🖥️ Console (System Monitor)
+- **CPU Usage** - Real-time CPU usage monitoring
+- **Memory Status** - Display used/available memory
+- **Disk Space** - Visual disk usage percentage
+- **Process Management** - View and manage running apps and background processes
+- **One-Click Stop** - Quickly terminate unwanted processes
+
+### 📦 App Uninstaller
+- **Smart Scanning** - Automatically detect installed applications
+- **Residual File Detection** - Find all associated residual files:
+  - Preferences
+  - Application Support
+  - Caches
+  - Logs
+  - Saved State
+  - Containers
+  - Launch Agents
+  - Crash Reports
+- **Complete Uninstall** - Remove app and all related files with one click
+- **Selective Deletion** - Choose to delete only residuals or include the app
+- **Move to Trash** - Safe deletion with recovery option
+
+### 🧹 Junk Cleaner
+- **System Cache** - Clean macOS system cache
+- **App Cache** - Clean cache files from various applications
+- **Browser Cache** - Support Safari, Chrome, Firefox, and more
+- **Log Files** - Clean system and app logs
+- **Categorized Display** - Group by type, support selective cleaning
+
+### ⚡ System Optimizer
+- **Startup Items** - View and disable startup items
+- **Memory Release** - One-click system memory cleanup
+- **System Acceleration** - Optimize system performance
+
+### 🔍 Large File Finder
+- **Smart Scanning** - Quickly locate space-consuming files
+- **Multi-Directory Scan** - Scan all files in home directory
+- **Visual Display** - Clear file size and location display
+- **Quick Cleanup** - Direct delete or move to trash
+
+### 🗑️ Trash Manager
+- **View Contents** - Browse all files in trash
+- **Space Statistics** - Show trash space usage
+- **One-Click Empty** - Quickly empty trash to free space
+
+### ✨ Deep Clean
+- **Orphaned File Scan** - Scan residual files from uninstalled apps
+- **Smart Recognition** - Auto-identify files not belonging to installed apps
+- **System Protection** - Auto-exclude Apple system files to prevent accidental deletion
+- **Categorized Display** - Group by type: App Support, Cache, Preferences, Containers, Logs
+- **Selective Cleanup** - Support select all/none, freely choose items to clean
+- **Safe Deletion** - Files move to trash for recovery
+
+### 📁 File Explorer
+- **Disk Browsing** - Browse entire Mac disk directory structure
+- **Quick Access** - Home, Desktop, Documents, Downloads, Applications, Disk Root
+- **Navigation** - Forward/Back/Parent + Breadcrumb path bar
+- **Path Input** - Manual path input for quick navigation (supports `~`)
+- **File Operations** - New folder, new file, rename, delete
+- **Hidden Files** - Toggle show/hide system hidden files
+- **Terminal Integration** - One-click open current directory in Terminal
+- **Context Menu** - Open, Show in Finder, Rename, Delete
+
+---
+
+## 📸 Screenshots
+
+![Console](image.png)
+![Uninstaller](image-1.png)
+![Cleaner](image-2.png)
+![Large Files](image-3.png)
+![Deep Clean](image-4.png)
+![File Explorer](image-5.png)
+
+---
+
+## 🛠️ Installation & Build
+
+### System Requirements
+- **macOS 13.0 (Ventura)** or later
+- **Apple Silicon (M1/M2/M3)** or Intel (modify build parameters)
+- **Command Line Tools** (Full Xcode not required)
+
+### Build from Source
+
+```bash
+# 1. Clone repository
+git clone https://github.com/ddlmanus/MacOptimizer.git
+cd MacOptimizer
+
+# 2. Run build script
+chmod +x build.sh
+./build.sh
+
+# 3. Launch app
+open build/Mac优化大师.app
+```
+
+### Intel Support
+
+For Intel Mac, modify `build.sh`:
+
+```bash
+# Change
+-target arm64-apple-macos13.0
+# To
+-target x86_64-apple-macos13.0
+```
+
+---
+
+## 📁 Project Structure
+
+```
+MacOptimizer/
+├── AppUninstaller/              # Source code
+│   ├── AppUninstallerApp.swift  # App entry
+│   ├── ContentView.swift        # Main view
+│   ├── NavigationSidebar.swift  # Sidebar navigation
+│   ├── LocalizationManager.swift # i18n manager (New!)
+│   ├── Models.swift             # Data models
+│   ├── Styles.swift             # Global styles
+│   │
+│   ├── MonitorView.swift        # Console view
+│   ├── SystemMonitorService.swift
+│   ├── ProcessService.swift
+│   │
+│   ├── AppScanner.swift         # App scanner
+│   ├── AppDetailView.swift      # App detail view
+│   ├── ResidualFileScanner.swift
+│   ├── FileRemover.swift
+│   │
+│   ├── JunkCleaner.swift        # Junk cleaner
+│   ├── JunkCleanerView.swift
+│   │
+│   ├── SystemOptimizer.swift    # System optimizer
+│   ├── OptimizerView.swift
+│   │
+│   ├── LargeFileScanner.swift   # Large file scanner
+│   ├── LargeFileView.swift
+│   │
+│   ├── TrashView.swift          # Trash view
+│   ├── DiskSpaceManager.swift
+│   ├── DiskUsageView.swift
+│   │
+│   ├── DeepCleanScanner.swift   # Deep clean
+│   ├── DeepCleanView.swift
+│   │
+│   ├── FileExplorerService.swift # File explorer
+│   ├── FileExplorerView.swift
+│   │
+│   ├── Info.plist
+│   └── AppIcon.icns
+│
+├── build.sh                     # Build script
+├── release_package.sh           # Release packaging
+└── README.md
+```
+
+---
+
+## 🔧 Tech Stack
+
+- **Language**: Swift 5.9
+- **UI Framework**: SwiftUI 4.0
+- **Minimum Support**: macOS 13.0 (Ventura)
+- **Architecture**: MVVM
+- **Build Tool**: Swift Compiler (swiftc)
+
+---
+
+## 🚀 Roadmap
+
+- [x] Multi-language support (English/中文)
+- [ ] Scheduled cleanup tasks
+- [ ] Menu bar widget
+- [ ] App update detection
+- [ ] Duplicate file finder
+- [ ] Privacy protection (browsing history cleanup)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Submit a Pull Request or create an Issue.
+
+1. Fork this repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Create Pull Request
+
+---
+
+## 📄 License
+
+This project is open source under the [MIT License](LICENSE).
+
+---
+
+## ⚠️ Disclaimer
+
+- Back up important data before use
+- Deleting system files may cause apps to malfunction
+- Recommend using "Move to Trash" first, then empty after confirming
+- This tool is for learning and personal use only
+
+---
+
+<p align="center">
+  Made with ❤️ for macOS
+</p>
+
+---
+
+# 中文说明
+
 ## ✨ 功能特性
 
-Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化的 SwiftUI 界面,提供八大核心功能模块:
+Mac优化大师是一款专为 macOS 设计的系统优化工具，采用现代化的 SwiftUI 界面，提供八大核心功能模块：
 
-### 🖥️ 控制台 (系统监控)
+### 🌐 多语言支持（新功能！）
+- **中英双语** - 一键切换界面语言
+- **设置持久化** - 语言偏好自动保存
+- **全覆盖** - 所有界面元素均支持本地化
+
+### 🖥️ 控制台（系统监控）
 - **CPU 占用率** - 实时监控 CPU 使用情况
 - **内存状态** - 显示已用/可用内存
 - **磁盘空间** - 可视化磁盘使用占比
@@ -42,14 +274,14 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
   - 崩溃报告 (Crash Reports)
 - **完全卸载** - 一键删除应用及所有相关文件
 - **选择性删除** - 可选择仅删除残留文件或连同应用一起删除
-- **移至废纸篓** - 支持安全删除,可从废纸篓恢复
+- **移至废纸篓** - 支持安全删除，可从废纸篓恢复
 
 ### 🧹 垃圾清理
 - **系统缓存** - 清理 macOS 系统缓存
 - **应用缓存** - 清理各应用产生的缓存文件
 - **浏览器缓存** - 支持 Safari、Chrome、Firefox 等主流浏览器
 - **日志文件** - 清理系统和应用日志
-- **分类展示** - 按类型分组显示,支持选择性清理
+- **分类展示** - 按类型分组显示，支持选择性清理
 
 ### ⚡ 系统优化
 - **启动项管理** - 查看和禁用开机启动项
@@ -67,19 +299,19 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
 - **空间统计** - 显示废纸篓占用空间
 - **一键清空** - 快速清空废纸篓释放空间
 
-### ✨ 深度清理 (新功能)
+### ✨ 深度清理
 - **孤立文件扫描** - 扫描已卸载应用的残留文件
 - **智能识别** - 自动识别不属于任何已安装应用的文件
-- **系统保护** - 自动排除 Apple 系统文件,防止误删
-- **分类展示** - 按类型分组:应用支持、缓存、偏好设置、容器、日志等
-- **选择性清理** - 支持全选/反选,自由选择要清理的项目
-- **安全删除** - 文件移至废纸篓,可恢复
+- **系统保护** - 自动排除 Apple 系统文件，防止误删
+- **分类展示** - 按类型分组：应用支持、缓存、偏好设置、容器、日志等
+- **选择性清理** - 支持全选/反选，自由选择要清理的项目
+- **安全删除** - 文件移至废纸篓，可恢复
 
-### 📁 文件管理 (新功能)
+### 📁 文件管理
 - **磁盘浏览** - 浏览整个 Mac 磁盘目录结构
 - **快捷访问** - 主目录、桌面、文稿、下载、应用程序、磁盘根目录
 - **导航功能** - 前进/后退/上级目录 + 面包屑路径栏
-- **路径输入** - 支持手动输入路径快速跳转 (支持 `~` 主目录)
+- **路径输入** - 支持手动输入路径快速跳转（支持 `~` 主目录）
 - **文件操作** - 新建文件夹、新建文件、重命名、删除
 - **显示隐藏文件** - 可切换显示/隐藏系统隐藏文件
 - **终端集成** - 一键在系统终端中打开当前目录
@@ -87,29 +319,12 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
 
 ---
 
-## 📸 界面预览
-
- 部分功能截图
- ![alt text](image.png)
-
- ![alt text](image-1.png)
-
-
-![alt text](image-2.png)
-
-![alt text](image-3.png)
-
-![alt text](image-4.png)
-
-![alt text](image-5.png)
-
-
 ## 🛠️ 安装与构建
 
 ### 系统要求
 - **macOS 13.0 (Ventura)** 或更高版本
-- **Apple Silicon (M1/M2/M3)** 或 Intel 芯片 (需修改编译参数)
-- **Command Line Tools** (无需安装完整 Xcode)
+- **Apple Silicon (M1/M2/M3)** 或 Intel 芯片（需修改编译参数）
+- **Command Line Tools**（无需安装完整 Xcode）
 
 ### 从源码编译
 
@@ -126,18 +341,9 @@ chmod +x build.sh
 open build/Mac优化大师.app
 ```
 
-### 构建脚本说明
-
-`build.sh` 脚本会自动完成以下步骤:
-1. ✅ 检查所有源文件是否存在
-2. ✅ 创建构建目录和 .app 包结构
-3. ✅ 复制 Info.plist 和图标文件
-4. ✅ 使用 `swiftc` 编译 Swift 源代码
-5. ✅ 使用 Ad-hoc 签名进行代码签名
-
 ### Intel 芯片支持
 
-如需在 Intel Mac 上编译,请修改 `build.sh` 中的编译参数:
+如需在 Intel Mac 上编译，请修改 `build.sh` 中的编译参数：
 
 ```bash
 # 将
@@ -148,109 +354,12 @@ open build/Mac优化大师.app
 
 ---
 
-## 📁 项目结构
-
-```
-MacOptimizer/
-├── AppUninstaller/              # 源代码目录
-│   ├── AppUninstallerApp.swift  # 应用入口
-│   ├── ContentView.swift        # 主视图
-│   ├── NavigationSidebar.swift  # 侧边栏导航
-│   ├── Models.swift             # 数据模型
-│   ├── Styles.swift             # 全局样式与主题
-│   │
-│   ├── # 功能模块
-│   ├── MonitorView.swift        # 控制台视图
-│   ├── SystemMonitorService.swift # 系统监控服务
-│   ├── ProcessService.swift     # 进程管理服务
-│   │
-│   ├── AppScanner.swift         # 应用扫描器
-│   ├── AppDetailView.swift      # 应用详情视图
-│   ├── ResidualFileScanner.swift # 残留文件扫描器
-│   ├── FileRemover.swift        # 文件删除器
-│   │
-│   ├── JunkCleaner.swift        # 垃圾清理逻辑
-│   ├── JunkCleanerView.swift    # 垃圾清理视图
-│   │
-│   ├── SystemOptimizer.swift    # 系统优化逻辑
-│   ├── OptimizerView.swift      # 系统优化视图
-│   │
-│   ├── LargeFileScanner.swift   # 大文件扫描器
-│   ├── LargeFileView.swift      # 大文件视图
-│   │
-│   ├── TrashView.swift          # 废纸篓视图
-│   ├── DiskSpaceManager.swift   # 磁盘空间管理
-│   ├── DiskUsageView.swift      # 磁盘使用视图
-│   │
-│   ├── DeepCleanScanner.swift   # 深度清理扫描器
-│   ├── DeepCleanView.swift      # 深度清理视图
-│   │
-│   ├── FileExplorerService.swift # 文件管理器服务
-│   ├── FileExplorerView.swift   # 文件管理器视图
-│   │
-│   ├── Info.plist               # 应用配置
-│   └── AppIcon.icns             # 应用图标
-│
-├── build.sh                     # 构建脚本
-├── release_package.sh           # 发布打包脚本 (生成 Universal Binary 和 DMG)
-├── generate_icon.swift          # 图标生成脚本
-└── README.md                    # 项目说明
-```
-
----
-
-## 🔧 技术栈
-
-- **语言**: Swift 5.9
-- **UI 框架**: SwiftUI 4.0
-- **最低支持**: macOS 13.0 (Ventura)
-- **架构模式**: MVVM
-- **构建工具**: Swift Compiler (swiftc)
-
----
-
-## 🚀 开发计划
-
-- [ ] 国际化支持 (English/中文)
-- [ ] 定时清理任务
-- [ ] 系统状态菜单栏小组件
-- [ ] 应用更新检测
-- [ ] 重复文件查找
-- [ ] 隐私保护 (浏览历史清理)
-
----
-
-## 🤝 贡献指南
-
-欢迎提交 Pull Request 或创建 Issue!
-
-1. Fork 本仓库
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
----
-
-## 📄 许可证
-
-本项目采用 [MIT 许可证](LICENSE) 开源。
-
----
-
 ## ⚠️ 免责声明
 
 - 请在使用前备份重要数据
 - 删除系统文件可能导致应用无法正常工作
-- 建议先使用"移至废纸篓"功能,确认无误后再清空
+- 建议先使用"移至废纸篓"功能，确认无误后再清空
 - 本工具仅供学习和个人使用
-
----
-
-## 🙏 致谢
-
-- 界面设计灵感来自 [CleanMyMac X](https://cleanmymac.com/)
-- 感谢所有贡献者的支持
 
 ---
 

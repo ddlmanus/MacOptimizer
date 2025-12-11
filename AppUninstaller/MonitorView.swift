@@ -3,6 +3,7 @@ import SwiftUI
 struct MonitorView: View {
     @StateObject private var systemService = SystemMonitorService()
     @StateObject private var processService = ProcessService()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var showApps = true // Toggle between Apps and Background Tasks
     
     var body: some View {
@@ -10,11 +11,11 @@ struct MonitorView: View {
             // Header
             HStack {
                 VStack(alignment: .leading) {
-                    Text("控制台")
+                    Text(loc.L("monitor"))
                         .font(.largeTitle)
                         .bold()
                         .foregroundColor(.white)
-                    Text("实时资源监控与进程管理")
+                    Text(loc.L("monitor_desc"))
                         .foregroundColor(.white.opacity(0.7))
                 }
                 Spacer()
@@ -35,11 +36,11 @@ struct MonitorView: View {
                 VStack(spacing: 20) {
                     // Top Row: CPU & Memory
                     HStack(spacing: 20) {
-                        MonitorCard(title: "CPU 占用率", icon: "cpu", color: .blue) {
+                        MonitorCard(title: loc.L("cpu_usage"), icon: "cpu", color: .blue) {
                             UsageRing(percentage: systemService.cpuUsage, label: String(format: "%.1f%%", systemService.cpuUsage * 100))
                         }
                         
-                        MonitorCard(title: "内存使用", icon: "memorychip", color: .green) {
+                        MonitorCard(title: loc.L("memory_usage"), icon: "memorychip", color: .green) {
                             VStack(spacing: 8) {
                                 UsageRing(percentage: systemService.memoryUsage, label: String(format: "%.0f%%", systemService.memoryUsage * 100))
                                 Text("\(systemService.memoryUsedString) / \(systemService.memoryTotalString)")
@@ -52,7 +53,7 @@ struct MonitorView: View {
                     
                     // Disk Usage
                     HStack(spacing: 20) {
-                        MonitorCard(title: "磁盘空间", icon: "internaldrive", color: .purple) {
+                        MonitorCard(title: loc.L("disk_usage"), icon: "internaldrive", color: .purple) {
                              DiskUsageView()
                                  .padding(.top, 20)
                         }
@@ -67,7 +68,7 @@ struct MonitorView: View {
                                 showApps = true 
                                 Task { await processService.scanProcesses(showApps: true) }
                             }) {
-                                Text("运行中应用")
+                                Text(loc.currentLanguage == .chinese ? "运行中应用" : "Running Apps")
                                     .fontWeight(.semibold)
                                     .foregroundColor(showApps ? .white : .white.opacity(0.5))
                                     .padding(.bottom, 4)
@@ -85,7 +86,7 @@ struct MonitorView: View {
                                 showApps = false 
                                 Task { await processService.scanProcesses(showApps: false) }
                             }) {
-                                Text("后台进程")
+                                Text(loc.currentLanguage == .chinese ? "后台进程" : "Background")
                                     .fontWeight(.semibold)
                                     .foregroundColor(!showApps ? .white : .white.opacity(0.5))
                                     .padding(.bottom, 4)
@@ -101,7 +102,7 @@ struct MonitorView: View {
                             
                             Spacer()
                             
-                            Text("共 \(processService.processes.count) 个进程")
+                            Text(loc.currentLanguage == .chinese ? "共 \(processService.processes.count) 个进程" : "\(processService.processes.count) processes")
                                 .font(.caption)
                                 .foregroundColor(.secondaryText)
                         }
@@ -145,7 +146,7 @@ struct MonitorView: View {
                                                 .foregroundColor(.red.opacity(0.8))
                                         }
                                         .buttonStyle(.plain)
-                                        .help("停止进程")
+                                        .help(loc.L("stop_process"))
                                     }
                                     .padding(12)
                                     .background(Color.white.opacity(0.02))

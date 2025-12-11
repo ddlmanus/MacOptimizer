@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiskUsageView: View {
     @StateObject private var diskManager = DiskSpaceManager.shared
+    @ObservedObject private var loc = LocalizationManager.shared
     
     var body: some View {
         VStack(spacing: 8) {
@@ -12,7 +13,7 @@ struct DiskUsageView: View {
                 
                 Spacer()
                 
-                Text("\(diskManager.formattedFree) 可用 / 共 \(diskManager.formattedTotal)")
+                Text(loc.currentLanguage == .chinese ? "\(diskManager.formattedFree) 可用 / 共 \(diskManager.formattedTotal)" : "\(diskManager.formattedFree) Free / \(diskManager.formattedTotal)")
                     .font(.system(size: 11))
                     .foregroundColor(.secondaryText)
             }

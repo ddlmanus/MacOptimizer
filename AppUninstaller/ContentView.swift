@@ -59,6 +59,7 @@ struct ContentView: View {
 // 包装现有的 Uninstaller 视图
 struct UninstallerMainView: View {
     @StateObject private var appScanner = AppScanner()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var selectedApp: InstalledApp?
     @State private var searchText = ""
     @State private var showingDeleteConfirmation = false
@@ -106,7 +107,8 @@ struct UninstallerMainView: View {
                 },
                 onRefresh: {
                     Task { await appScanner.scanApplications() }
-                }
+                },
+                loc: loc
             )
             .frame(minWidth: 300, maxWidth: 400)
             
@@ -133,10 +135,10 @@ struct UninstallerMainView: View {
             }
         }
         .confirmationDialog(
-            "确认删除",
+            loc.L("confirm_delete"),
             isPresented: $showingDeleteConfirmation
         ) {
-            Button("删除", role: .destructive) {
+            Button(loc.L("delete"), role: .destructive) {
                 guard let app = selectedApp else { return }
                 Task {
                     let result = await fileRemover.removeApp(
@@ -162,7 +164,7 @@ struct UninstallerMainView: View {
                     }
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(loc.L("cancel"), role: .cancel) {}
         } message: {
             if let app = selectedApp {
                 Text(includeAppInDeletion
@@ -170,8 +172,8 @@ struct UninstallerMainView: View {
                      : "确定要删除 \(app.name) 的残留文件吗？\n此操作\(moveToTrash ? "会将文件移至废纸篓" : "不可撤销")。")
             }
         }
-        .alert("删除完成", isPresented: $showingResultAlert) {
-            Button("确定", role: .cancel) {}
+        .alert(loc.L("clean_complete"), isPresented: $showingResultAlert) {
+            Button(loc.L("confirm"), role: .cancel) {}
         } message: {
             if let result = deleteResult {
                 Text("成功删除 \(result.successCount) 个项目\n释放空间: \(ByteCountFormatter.string(fromByteCount: result.totalSizeRemoved, countStyle: .file))")
@@ -188,12 +190,13 @@ struct AppListView: View {
     @Binding var searchText: String
     let onSelect: (InstalledApp) -> Void
     let onRefresh: () -> Void
+    @ObservedObject var loc: LocalizationManager
     
     var body: some View {
         VStack(spacing: 0) {
             // 头部工具栏
             HStack {
-                Text("应用列表")
+                Text(loc.currentLanguage == .chinese ? "应用列表" : "App List")
                     .font(.headline)
                     .foregroundColor(.white)
                 
@@ -211,7 +214,7 @@ struct AppListView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.white.opacity(0.3))
-                TextField("搜索应用...", text: $searchText)
+                TextField(loc.L("search_apps"), text: $searchText)
                     .textFieldStyle(.plain)
                     .foregroundColor(.white)
             }
@@ -225,7 +228,7 @@ struct AppListView: View {
                 Spacer()
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("扫描应用中...")
+                Text(loc.currentLanguage == .chinese ? "扫描应用中..." : "Scanning apps...")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.top, 8)
@@ -247,7 +250,7 @@ struct AppListView: View {
             
             // 底部统计
             HStack {
-                Text("\(apps.count) 个应用")
+                Text(loc.currentLanguage == .chinese ? "\(apps.count) 个应用" : "\(apps.count) apps")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
@@ -261,12 +264,14 @@ struct AppListView: View {
 
 // 拆分出来的空状态视图
 struct EmptySelectionView: View {
+    @ObservedObject private var loc = LocalizationManager.shared
+    
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "app.square")
                 .font(.system(size: 64))
                 .foregroundColor(.white.opacity(0.1))
-            Text("选择一个应用以查看详情")
+            Text(loc.currentLanguage == .chinese ? "选择一个应用以查看详情" : "Select an app to view details")
                 .font(.title3)
                 .foregroundColor(.white.opacity(0.3))
         }

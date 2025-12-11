@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FileExplorerView: View {
     @StateObject private var service = FileExplorerService()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var showNewFolderDialog = false
     @State private var showNewFileDialog = false
     @State private var showRenameDialog = false
@@ -34,7 +35,7 @@ struct FileExplorerView: View {
                 if service.isLoading {
                     Spacer()
                     ProgressView()
-                    Text("加载中...")
+                    Text(loc.L("loading"))
                         .foregroundColor(.secondaryText)
                     Spacer()
                 } else if let error = service.error {
@@ -46,7 +47,7 @@ struct FileExplorerView: View {
                         Text(error)
                             .foregroundColor(.secondaryText)
                             .multilineTextAlignment(.center)
-                        Button("返回上级目录") {
+                        Button(loc.L("go_back")) {
                             service.goUp()
                         }
                         .buttonStyle(.plain)
@@ -95,7 +96,7 @@ struct FileExplorerView: View {
     
     private var sidebarView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("快捷访问")
+            Text(loc.L("quick_access"))
                 .font(.caption)
                 .foregroundColor(.tertiaryText)
                 .padding(.horizontal, 16)
@@ -129,7 +130,7 @@ struct FileExplorerView: View {
             
             // 显示隐藏文件开关
             Toggle(isOn: $service.showHiddenFiles) {
-                Text("显示隐藏文件")
+                Text(loc.L("show_hidden"))
                     .font(.caption)
             }
             .toggleStyle(.switch)
@@ -180,14 +181,14 @@ struct FileExplorerView: View {
             // 操作按钮
             HStack(spacing: 8) {
                 Button(action: { showNewFolderDialog = true }) {
-                    Label("新建文件夹", systemImage: "folder.badge.plus")
+                    Label(loc.L("new_folder"), systemImage: "folder.badge.plus")
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.white.opacity(0.8))
                 
                 Button(action: { showNewFileDialog = true }) {
-                    Label("新建文件", systemImage: "doc.badge.plus")
+                    Label(loc.L("new_file"), systemImage: "doc.badge.plus")
                         .font(.caption)
                 }
                 .buttonStyle(.plain)
@@ -196,7 +197,7 @@ struct FileExplorerView: View {
                 Divider().frame(height: 20)
                 
                 Button(action: { openTerminalAtCurrentPath() }) {
-                    Label("在终端中打开", systemImage: "terminal")
+                    Label(loc.L("open_in_terminal"), systemImage: "terminal")
                         .font(.caption)
                 }
                 .buttonStyle(.plain)

@@ -4,6 +4,7 @@ import AppKit
 // MARK: - 应用详情视图
 struct AppDetailView: View {
     @ObservedObject var app: InstalledApp
+    @ObservedObject private var loc = LocalizationManager.shared
     let onDelete: (Bool, Bool) -> Void
     
     @State private var includeApp = true
@@ -88,7 +89,7 @@ struct AppDetailView: View {
                     HStack(spacing: 12) {
                         StatBadge(
                             icon: "internaldrive.fill",
-                            label: "应用大小",
+                            label: loc.currentLanguage == .chinese ? "应用大小" : "App Size",
                             value: app.formattedSize,
                             color: .uninstallerStart
                         )
@@ -96,14 +97,14 @@ struct AppDetailView: View {
                         if !app.residualFiles.isEmpty {
                             StatBadge(
                                 icon: "doc.on.doc.fill",
-                                label: "残留文件",
-                                value: "\(app.residualFiles.count) 个",
+                                label: loc.L("residual_files"),
+                                value: loc.currentLanguage == .chinese ? "\(app.residualFiles.count) 个" : "\(app.residualFiles.count)",
                                 color: .warning
                             )
                             
                             StatBadge(
                                 icon: "trash.fill",
-                                label: "可清理",
+                                label: loc.currentLanguage == .chinese ? "可清理" : "Cleanable",
                                 value: app.formattedResidualSize,
                                 color: .danger
                             )
@@ -138,7 +139,7 @@ struct AppDetailView: View {
                     .scaleEffect(1.4)
             }
             
-            Text("正在扫描残留文件...")
+            Text(loc.currentLanguage == .chinese ? "正在扫描残留文件..." : "Scanning residual files...")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(.secondaryText)
             
@@ -162,11 +163,11 @@ struct AppDetailView: View {
             }
             
             VStack(spacing: 8) {
-                Text("太棒了！")
+                Text(loc.currentLanguage == .chinese ? "太棒了！" : "Excellent!")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primaryText)
                 
-                Text("此应用没有检测到残留文件")
+                Text(loc.currentLanguage == .chinese ? "此应用没有检测到残留文件" : "No residual files detected for this app")
                     .font(.system(size: 14))
                     .foregroundColor(.secondaryText)
             }
@@ -181,7 +182,7 @@ struct AppDetailView: View {
             // 列表头部
             HStack {
                 Toggle(isOn: $selectAll) {
-                    Text("全选")
+                    Text(loc.L("selectAll"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondaryText)
                 }
@@ -194,7 +195,7 @@ struct AppDetailView: View {
                     Text("\(selectedFilesCount)")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(GradientStyles.uninstaller)
-                    Text("/ \(app.residualFiles.count) 已选择")
+                    Text(loc.currentLanguage == .chinese ? "/ \(app.residualFiles.count) 已选择" : "/ \(app.residualFiles.count) selected")
                         .font(.system(size: 12))
                         .foregroundColor(.tertiaryText)
                 }
@@ -213,7 +214,7 @@ struct AppDetailView: View {
                     ForEach(FileType.allCases) { type in
                         let filesOfType = app.residualFiles.filter { $0.type == type }
                         if !filesOfType.isEmpty {
-                            FileTypeSection(type: type, files: filesOfType)
+                            FileTypeSection(type: type, files: filesOfType, loc: loc)
                         }
                     }
                 }
@@ -236,7 +237,7 @@ struct AppDetailView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "app.fill")
                                 .font(.system(size: 11))
-                            Text("包含应用本体")
+                            Text(loc.currentLanguage == .chinese ? "包含应用本体" : "Include App")
                                 .font(.system(size: 13))
                         }
                         .foregroundColor(.primaryText.opacity(0.85))
@@ -247,7 +248,7 @@ struct AppDetailView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "trash")
                                 .font(.system(size: 11))
-                            Text("移至废纸篓（可恢复）")
+                            Text(loc.currentLanguage == .chinese ? "移至废纸篓（可恢复）" : "Move to Trash (Recoverable)")
                                 .font(.system(size: 13))
                         }
                         .foregroundColor(.primaryText.opacity(0.85))
@@ -259,7 +260,7 @@ struct AppDetailView: View {
                 
                 // 删除统计
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("将清理")
+                    Text(loc.currentLanguage == .chinese ? "将清理" : "To Clean")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.tertiaryText)
                     
@@ -276,7 +277,7 @@ struct AppDetailView: View {
                     HStack(spacing: 8) {
                         Image(systemName: includeApp ? "trash.fill" : "paintbrush.fill")
                             .font(.system(size: 14))
-                        Text(includeApp ? "卸载应用" : "清理残留")
+                        Text(loc.currentLanguage == .chinese ? (includeApp ? "卸载应用" : "清理残留") : (includeApp ? "Uninstall" : "Clean"))
                     }
                 }
                 .buttonStyle(PrimaryButtonStyle(isDestructive: includeApp))
@@ -326,10 +327,37 @@ struct StatBadge: View {
 struct FileTypeSection: View {
     let type: FileType
     let files: [ResidualFile]
+    @ObservedObject var loc: LocalizationManager
     @State private var isExpanded = true
     
     var totalSize: Int64 {
         files.reduce(0) { $0 + $1.size }
+    }
+    
+    // 获取本地化的类型名
+    private var localizedTypeName: String {
+        switch type {
+        case .preferences:
+            return loc.L("preferences")
+        case .applicationSupport:
+            return loc.L("app_support")
+        case .caches:
+            return loc.L("cache")
+        case .containers:
+            return loc.L("containers")
+        case .savedState:
+            return loc.L("saved_state")
+        case .logs:
+            return loc.L("logs")
+        case .groupContainers:
+            return loc.L("group_containers")
+        case .cookies:
+            return loc.L("cookies")
+        case .launchAgents:
+            return loc.L("launch_agents")
+        case .crashReports:
+            return loc.L("crash_reports")
+        }
     }
     
     var body: some View {
@@ -352,7 +380,7 @@ struct FileTypeSection: View {
                             .foregroundColor(Color(nsColor: type.color))
                     }
                     
-                    Text(type.rawValue)
+                    Text(localizedTypeName)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primaryText)
                     

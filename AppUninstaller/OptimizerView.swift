@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OptimizerView: View {
     @StateObject private var optimizer = SystemOptimizer()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var showingUsageAlert = false
     
     var body: some View {
@@ -9,15 +10,15 @@ struct OptimizerView: View {
             headerView
             
             if optimizer.isScanning {
-                ProgressView("正在扫描启动项...")
+                ProgressView(loc.currentLanguage == .chinese ? "正在扫描启动项..." : "Scanning startup items...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if optimizer.launchAgents.isEmpty {
                 emptyStateView
             } else {
                 List {
-                    Section(header: Text("用户启动代理 (Launch Agents)").foregroundColor(.secondaryText)) {
+                    Section(header: Text(loc.currentLanguage == .chinese ? "用户启动代理 (Launch Agents)" : "User Launch Agents").foregroundColor(.secondaryText)) {
                         ForEach(optimizer.launchAgents) { agent in
-                            AgentRow(agent: agent, optimizer: optimizer)
+                            AgentRow(agent: agent, optimizer: optimizer, loc: loc)
                         }
                     }
                 }
@@ -33,11 +34,11 @@ struct OptimizerView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("系统优化")
+                Text(loc.L("optimizer"))
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                Text("管理开机启动项，提升系统速度")
+                Text(loc.currentLanguage == .chinese ? "管理开机启动项，提升系统速度" : "Manage startup items to boost system speed")
                     .font(.subheadline)
                     .foregroundColor(.secondaryText)
             }
@@ -60,7 +61,7 @@ struct OptimizerView: View {
             Image(systemName: "bolt.badge.checkmark.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(GradientStyles.optimizer)
-            Text("没有发现用户启动项")
+            Text(loc.currentLanguage == .chinese ? "没有发现用户启动项" : "No user startup items found")
                 .font(.title3)
                 .foregroundColor(.white)
             Spacer()
@@ -71,6 +72,7 @@ struct OptimizerView: View {
 struct AgentRow: View {
     @ObservedObject var agent: LaunchItem
     @ObservedObject var optimizer: SystemOptimizer
+    @ObservedObject var loc: LocalizationManager
     @State private var isPerformAction = false
     
     var body: some View {
@@ -86,7 +88,7 @@ struct AgentRow: View {
                     .foregroundColor(.primaryText)
                     .lineLimit(1)
                 
-                Text(agent.isEnabled ? "已启用" : "已禁用")
+                Text(agent.isEnabled ? (loc.currentLanguage == .chinese ? "已启用" : "Enabled") : (loc.currentLanguage == .chinese ? "已禁用" : "Disabled"))
                     .font(.caption)
                     .foregroundColor(agent.isEnabled ? .success : .secondaryText)
             }

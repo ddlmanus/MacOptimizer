@@ -27,6 +27,7 @@ SOURCE_DIR="AppUninstaller"
 echo -e "${YELLOW}[1/5] 检查源文件...${NC}"
 SWIFT_FILES=(
     "${SOURCE_DIR}/Models.swift"
+    "${SOURCE_DIR}/LocalizationManager.swift"
     "${SOURCE_DIR}/AppScanner.swift"
     "${SOURCE_DIR}/ResidualFileScanner.swift"
     "${SOURCE_DIR}/FileRemover.swift"

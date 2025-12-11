@@ -2,6 +2,7 @@ import SwiftUI
 
 struct JunkCleanerView: View {
     @StateObject private var cleaner = JunkCleaner()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var showingCleanAlert = false
     @State private var cleanedAmount: Int64 = 0
     @State private var animateScan = false
@@ -45,10 +46,10 @@ struct JunkCleanerView: View {
                 Task { await cleaner.scanJunk() }
             }
         }
-        .alert("清理完成", isPresented: $showingCleanAlert) {
-            Button("确定", role: .cancel) {}
+        .alert(loc.L("clean_complete"), isPresented: $showingCleanAlert) {
+            Button(loc.L("confirm"), role: .cancel) {}
         } message: {
-            Text("成功清理了 \(ByteCountFormatter.string(fromByteCount: cleanedAmount, countStyle: .file)) 的垃圾文件。")
+            Text(loc.currentLanguage == .chinese ? "成功清理了 \(ByteCountFormatter.string(fromByteCount: cleanedAmount, countStyle: .file)) 的垃圾文件。" : "Cleaned \(ByteCountFormatter.string(fromByteCount: cleanedAmount, countStyle: .file)) of junk files.")
         }
     }
     
@@ -56,11 +57,11 @@ struct JunkCleanerView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("系统垃圾清理")
+                Text(loc.currentLanguage == .chinese ? "系统垃圾清理" : "System Junk Cleaner")
                     .font(.largeTitle)
                     .bold()
                     .foregroundColor(.white)
-                Text("移除缓存、日志和临时文件，释放空间")
+                Text(loc.currentLanguage == .chinese ? "移除缓存、日志和临时文件，释放空间" : "Remove cache, logs and temp files to free up space")
                     .foregroundColor(.white.opacity(0.7))
             }
             Spacer()
@@ -108,7 +109,7 @@ struct JunkCleanerView: View {
             }
             
             VStack(spacing: 12) {
-                Text("正在深入扫描...")
+                Text(loc.currentLanguage == .chinese ? "正在深入扫描..." : "Deep Scanning...")
                     .font(.title3)
                     .fontWeight(.medium)
                     .foregroundColor(.white)
@@ -142,7 +143,7 @@ struct JunkCleanerView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("发现垃圾文件")
+                        Text(loc.currentLanguage == .chinese ? "发现垃圾文件" : "Junk Files Found")
                             .font(.headline)
                             .foregroundColor(.secondaryText)
                         
@@ -159,7 +160,7 @@ struct JunkCleanerView: View {
                 ForEach(JunkType.allCases) { type in
                     let items = cleaner.junkItems.filter { $0.type == type }
                     if !items.isEmpty {
-                        JunkGroupCard(type: type, items: items, cleaner: cleaner)
+                        JunkGroupCard(type: type, items: items, cleaner: cleaner, loc: loc)
                     }
                 }
                 
@@ -174,7 +175,7 @@ struct JunkCleanerView: View {
     private var bottomActionBar: some View {
         HStack(spacing: 24) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("即将清理")
+                Text(loc.currentLanguage == .chinese ? "即将清理" : "To Clean")
                     .font(.caption)
                     .foregroundColor(.secondaryText)
                 Text(ByteCountFormatter.string(fromByteCount: cleaner.selectedSize, countStyle: .file))
@@ -193,7 +194,7 @@ struct JunkCleanerView: View {
             }) {
                 HStack {
                     Image(systemName: "sparkles")
-                    Text("立即清理")
+                    Text(loc.currentLanguage == .chinese ? "立即清理" : "Clean Now")
                 }
                 .fontWeight(.semibold)
                 .frame(minWidth: 140)
@@ -228,11 +229,11 @@ struct JunkCleanerView: View {
             }
             
             VStack(spacing: 8) {
-                Text("系统非常干净")
+                Text(loc.currentLanguage == .chinese ? "系统非常干净" : "System is Very Clean")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
-                Text("没有发现需要清理的垃圾文件")
+                Text(loc.currentLanguage == .chinese ? "没有发现需要清理的垃圾文件" : "No junk files found")
                     .foregroundColor(.secondaryText)
             }
             Spacer()
@@ -245,6 +246,7 @@ struct JunkGroupCard: View {
     let type: JunkType
     let items: [JunkItem]
     @ObservedObject var cleaner: JunkCleaner
+    @ObservedObject var loc: LocalizationManager
     @State private var isExpanded = false
     
     var groupSize: Int64 {
@@ -253,6 +255,42 @@ struct JunkGroupCard: View {
     
     var isAllSelected: Bool {
         items.allSatisfy { $0.isSelected }
+    }
+    
+    // 获取本地化的类型名
+    private var localizedTypeName: String {
+        switch type {
+        case .userCache:
+            return loc.currentLanguage == .chinese ? "用户缓存" : "User Cache"
+        case .userLogs:
+            return loc.currentLanguage == .chinese ? "用户日志" : "User Logs"
+        case .trash:
+            return loc.L("trash")
+        case .browserCache:
+            return loc.currentLanguage == .chinese ? "浏览器缓存" : "Browser Cache"
+        case .appCache:
+            return loc.currentLanguage == .chinese ? "应用缓存" : "App Cache"
+        case .xcodeDerivedData:
+            return "Xcode DerivedData"
+        }
+    }
+    
+    // 获取本地化的描述
+    private var localizedDescription: String {
+        switch type {
+        case .userCache:
+            return loc.currentLanguage == .chinese ? "应用程序产生的临时缓存文件" : "Temporary cache files from applications"
+        case .userLogs:
+            return loc.currentLanguage == .chinese ? "应用程序运行日志和崩溃报告" : "App logs and crash reports"
+        case .trash:
+            return loc.currentLanguage == .chinese ? "废纸篓中的已删除文件" : "Deleted files in Trash"
+        case .browserCache:
+            return loc.currentLanguage == .chinese ? "Chrome、Safari 等浏览器的临时文件" : "Temp files from Chrome, Safari, etc."
+        case .appCache:
+            return loc.currentLanguage == .chinese ? "邮件附件、微信等应用的缓存文件" : "Cache from Mail, WeChat, etc."
+        case .xcodeDerivedData:
+            return loc.currentLanguage == .chinese ? "Xcode 编译产生的中间文件" : "Intermediate build files from Xcode"
+        }
     }
     
     var body: some View {
@@ -272,10 +310,10 @@ struct JunkGroupCard: View {
                 
                 // 信息
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(type.rawValue)
+                    Text(localizedTypeName)
                         .font(.headline)
                         .foregroundColor(.white)
-                    Text(type.description)
+                    Text(localizedDescription)
                         .font(.caption)
                         .foregroundColor(.secondaryText)
                 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LargeFileView: View {
     @StateObject private var scanner = LargeFileScanner()
+    @ObservedObject private var loc = LocalizationManager.shared
     @State private var selectedFile: FileItem?
     @State private var selectedFiles: Set<UUID> = []
     @State private var showDeleteConfirmation = false
@@ -48,11 +49,11 @@ struct LargeFileView: View {
                 // Header
                 HStack {
                     VStack(alignment: .leading) {
-                        Text("大文件查找")
+                        Text(loc.L("largeFiles"))
                             .font(.headline)
                             .foregroundColor(.white)
                         if !scanner.isScanning {
-                            Text("发现 \(scanner.foundFiles.count) 个文件 · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
+                            Text(loc.currentLanguage == .chinese ? "发现 \(scanner.foundFiles.count) 个文件 · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))" : "Found \(scanner.foundFiles.count) files · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
                                 .font(.caption)
                                 .foregroundColor(.secondaryText)
                         }
@@ -92,9 +93,9 @@ struct LargeFileView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                             .scaleEffect(0.8)
-                        Text("正在扫描大文件...")
+                        Text(loc.currentLanguage == .chinese ? "正在扫描大文件..." : "Scanning large files...")
                             .foregroundColor(.secondaryText)
-                        Text("已扫描 \(scanner.scannedCount) 个项目")
+                        Text(loc.currentLanguage == .chinese ? "已扫描 \(scanner.scannedCount) 个项目" : "Scanned \(scanner.scannedCount) items")
                             .font(.caption)
                             .foregroundColor(.tertiaryText)
                     }
@@ -105,7 +106,7 @@ struct LargeFileView: View {
                         Image(systemName: "magnifyingglass.circle")
                             .font(.system(size: 48))
                             .foregroundColor(.secondaryText)
-                        Text("点击刷新开始扫描\n(仅扫描 >50MB 文件)")
+                        Text(loc.currentLanguage == .chinese ? "点击刷新开始扫描\n(仅扫描 >50MB 文件)" : "Click refresh to scan\n(Only files >50MB)")
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondaryText)
                     }
@@ -134,11 +135,11 @@ struct LargeFileView: View {
                 
                 // Bottom Bar
                 HStack {
-                    Text("已选择: \(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))")
+                    Text(loc.currentLanguage == .chinese ? "已选择: \(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))" : "Selected: \(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))")
                         .font(.caption)
                         .foregroundColor(.secondaryText)
                     Spacer()
-                    Button("永久删除") {
+                    Button(loc.L("permanently_delete")) {
                         showDeleteConfirmation = true
                     }
                     .buttonStyle(CapsuleButtonStyle(gradient: GradientStyles.danger))
@@ -178,8 +179,8 @@ struct LargeFileView: View {
                 Task { await scanner.scan() }
             }
         }
-        .confirmationDialog("确认删除", isPresented: $showDeleteConfirmation) {
-            Button("永久删除 \(selectedFiles.count) 个文件", role: .destructive) {
+        .confirmationDialog(loc.L("confirm_delete"), isPresented: $showDeleteConfirmation) {
+            Button(loc.currentLanguage == .chinese ? "永久删除 \(selectedFiles.count) 个文件" : "Delete \(selectedFiles.count) files permanently", role: .destructive) {
                 Task {
                     await scanner.deleteItems(selectedFiles)
                     selectedFiles.removeAll()
@@ -188,9 +189,9 @@ struct LargeFileView: View {
                     }
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(loc.L("cancel"), role: .cancel) {}
         } message: {
-            Text("此操作不可撤销，文件将被直接删除。")
+            Text(loc.currentLanguage == .chinese ? "此操作不可撤销，文件将被直接删除。" : "This action cannot be undone. Files will be permanently deleted.")
         }
     }
 }
