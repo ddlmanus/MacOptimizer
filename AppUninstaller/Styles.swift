@@ -78,14 +78,30 @@ struct GradientStyles {
         endPoint: .bottomTrailing
     )
     
+    // 7. 深度清理 (翡翠绿)
+    static let deepClean = LinearGradient(
+        colors: [Color(red: 0.0, green: 0.6, blue: 0.4), Color(red: 0.0, green: 0.3, blue: 0.2)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    // 8. 文件管理器 (钢蓝色)
+    static let fileExplorer = LinearGradient(
+        colors: [Color(red: 0.2, green: 0.4, blue: 0.6), Color(red: 0.1, green: 0.2, blue: 0.4)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
     // 侧边栏选中高亮
     static func sidebarSelected(for module: AppModule) -> LinearGradient {
         switch module {
         case .monitor: return monitor
         case .uninstaller: return uninstaller
+        case .deepClean: return deepClean
         case .cleaner: return cleaner
         case .optimizer: return optimizer
         case .largeFiles: return largeFiles
+        case .fileExplorer: return fileExplorer
         case .trash: return trash
         }
     }
@@ -151,15 +167,37 @@ struct BackgroundStyles {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
+    
+    // 6. 深度清理 (翡翠绿 - 深度/精准)
+    static let deepClean = LinearGradient(
+        stops: [
+            .init(color: Color(red: 0.0, green: 0.4, blue: 0.3), location: 0.0), // 翡翠绿
+            .init(color: Color(red: 0.0, green: 0.2, blue: 0.15), location: 1.0) // 深绿
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    // 7. 文件管理器 (钢蓝色)
+    static let fileExplorer = LinearGradient(
+        stops: [
+            .init(color: Color(red: 0.15, green: 0.3, blue: 0.5), location: 0.0), // 钢蓝
+            .init(color: Color(red: 0.08, green: 0.15, blue: 0.3), location: 1.0) // 深蓝
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 }
 
 // MARK: - 模块枚举
 enum AppModule: String, CaseIterable, Identifiable {
     case monitor = "控制台"
     case uninstaller = "应用卸载"
+    case deepClean = "深度清理"
     case cleaner = "垃圾清理"
     case optimizer = "系统优化"
     case largeFiles = "大文件查找"
+    case fileExplorer = "文件管理"
     case trash = "废纸篓"
     
     
@@ -169,9 +207,11 @@ enum AppModule: String, CaseIterable, Identifiable {
         switch self {
         case .monitor: return "chart.bar.xaxis"
         case .uninstaller: return "square.grid.2x2.fill"
+        case .deepClean: return "wand.and.stars"
         case .cleaner: return "trash.fill"
         case .optimizer: return "bolt.fill"
         case .largeFiles: return "magnifyingglass.circle.fill"
+        case .fileExplorer: return "folder.fill"
         case .trash: return "trash.circle.fill"
         }
     }
@@ -180,9 +220,11 @@ enum AppModule: String, CaseIterable, Identifiable {
         switch self {
         case .monitor: return GradientStyles.monitor
         case .uninstaller: return GradientStyles.uninstaller
+        case .deepClean: return GradientStyles.deepClean
         case .cleaner: return GradientStyles.cleaner
         case .optimizer: return GradientStyles.optimizer
         case .largeFiles: return GradientStyles.largeFiles
+        case .fileExplorer: return GradientStyles.fileExplorer
         case .trash: return GradientStyles.trash
         }
     }
@@ -191,9 +233,11 @@ enum AppModule: String, CaseIterable, Identifiable {
         switch self {
         case .monitor: return BackgroundStyles.monitor
         case .uninstaller: return BackgroundStyles.uninstaller
+        case .deepClean: return BackgroundStyles.deepClean
         case .cleaner: return BackgroundStyles.cleaner
         case .optimizer: return BackgroundStyles.optimizer
         case .largeFiles: return BackgroundStyles.largeFiles
+        case .fileExplorer: return BackgroundStyles.fileExplorer
         case .trash: return BackgroundStyles.trash
         }
     }
@@ -202,9 +246,11 @@ enum AppModule: String, CaseIterable, Identifiable {
         switch self {
         case .monitor: return "CPU、内存、网络端口实时监控"
         case .uninstaller: return "完全删除应用及其残留文件"
+        case .deepClean: return "扫描已卸载应用的残留文件"
         case .cleaner: return "清理缓存和系统垃圾"
         case .optimizer: return "管理启动项，释放内存"
         case .largeFiles: return "发现并清理占用空间的大文件"
+        case .fileExplorer: return "浏览和管理磁盘文件"
         case .trash: return "查看并清空废纸篓"
         }
     }

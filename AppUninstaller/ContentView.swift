@@ -24,6 +24,9 @@ struct ContentView: View {
                         case .uninstaller:
                             UninstallerMainView()
                                 .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        case .deepClean:
+                            DeepCleanView()
+                                .transition(.opacity.combined(with: .move(edge: .trailing)))
                         case .cleaner:
                             JunkCleanerView()
                                 .transition(.opacity.combined(with: .move(edge: .trailing)))
@@ -32,6 +35,9 @@ struct ContentView: View {
                                 .transition(.opacity.combined(with: .move(edge: .trailing)))
                         case .largeFiles:
                             LargeFileView()
+                                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        case .fileExplorer:
+                            FileExplorerView()
                                 .transition(.opacity.combined(with: .move(edge: .trailing)))
                         case .trash:
                             TrashView()
