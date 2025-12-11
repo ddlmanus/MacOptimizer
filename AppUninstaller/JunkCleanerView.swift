@@ -32,12 +32,12 @@ struct JunkCleanerView: View {
                 }
             }
             
-            // 底部悬浮操作栏 (仅在有结果且未扫描时显示)
+            // 底部悬浮操作按钮 (仅在有结果且未扫描时显示)
             if !cleaner.isScanning && !cleaner.junkItems.isEmpty {
                 VStack {
                     Spacer()
-                    bottomActionBar
-                        .padding(.bottom, 24)
+                    cleanButton
+                        .padding(.bottom, 10)
                 }
             }
         }
@@ -165,54 +165,56 @@ struct JunkCleanerView: View {
                 }
                 
                 // 底部留白给悬浮Bar
-                Color.clear.frame(height: 100)
+                Color.clear.frame(height: 150)
             }
             .padding(24)
         }
     }
     
-    // MARK: - 底部悬浮操作栏
-    private var bottomActionBar: some View {
-        HStack(spacing: 24) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(loc.currentLanguage == .chinese ? "即将清理" : "To Clean")
-                    .font(.caption)
-                    .foregroundColor(.secondaryText)
-                Text(ByteCountFormatter.string(fromByteCount: cleaner.selectedSize, countStyle: .file))
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(GradientStyles.cleaner)
+    // MARK: - 清理按钮 (大圆圈)
+    private var cleanButton: some View {
+        Button(action: {
+            Task {
+                let result = await cleaner.cleanSelected()
+                cleanedAmount = result.cleaned
+                showingCleanAlert = true
             }
-            
-            Spacer()
-            
-            Button(action: {
-                Task {
-                    cleanedAmount = await cleaner.cleanSelected()
-                    showingCleanAlert = true
-                }
-            }) {
-                HStack {
+        }) {
+            ZStack {
+                // 外圈光晕
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.cleanerStart.opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+                
+                // 主圆圈
+                Circle()
+                    .fill(GradientStyles.cleaner)
+                    .frame(width: 90, height: 90)
+                    .shadow(color: Color.cleanerStart.opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                // 内容
+                VStack(spacing: 2) {
                     Image(systemName: "sparkles")
-                    Text(loc.currentLanguage == .chinese ? "立即清理" : "Clean Now")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                    Text(loc.currentLanguage == .chinese ? "清理" : "Clean")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(ByteCountFormatter.string(fromByteCount: cleaner.selectedSize, countStyle: .file))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.9))
                 }
-                .fontWeight(.semibold)
-                .frame(minWidth: 140)
             }
-            .buttonStyle(CapsuleButtonStyle(gradient: GradientStyles.cleaner))
-            .disabled(cleaner.selectedSize == 0)
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.cardBackground.opacity(0.95))
-                .shadow(color: Color.black.opacity(0.3), radius: 20, y: 10)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-        .padding(.horizontal, 24)
+        .buttonStyle(.plain)
+        .disabled(cleaner.selectedSize == 0)
     }
     
     // MARK: - 空状态
@@ -262,14 +264,24 @@ struct JunkGroupCard: View {
         switch type {
         case .userCache:
             return loc.currentLanguage == .chinese ? "用户缓存" : "User Cache"
+        case .systemCache:
+            return loc.currentLanguage == .chinese ? "系统缓存" : "System Cache"
         case .userLogs:
             return loc.currentLanguage == .chinese ? "用户日志" : "User Logs"
-        case .trash:
-            return loc.L("trash")
+        case .systemLogs:
+            return loc.currentLanguage == .chinese ? "系统日志" : "System Logs"
         case .browserCache:
             return loc.currentLanguage == .chinese ? "浏览器缓存" : "Browser Cache"
         case .appCache:
             return loc.currentLanguage == .chinese ? "应用缓存" : "App Cache"
+        case .chatCache:
+            return loc.currentLanguage == .chinese ? "聊天缓存" : "Chat Cache"
+        case .mailAttachments:
+            return loc.currentLanguage == .chinese ? "邮件附件" : "Mail Attachments"
+        case .crashReports:
+            return loc.currentLanguage == .chinese ? "崩溃报告" : "Crash Reports"
+        case .tempFiles:
+            return loc.currentLanguage == .chinese ? "临时文件" : "Temp Files"
         case .xcodeDerivedData:
             return "Xcode DerivedData"
         }
@@ -279,17 +291,27 @@ struct JunkGroupCard: View {
     private var localizedDescription: String {
         switch type {
         case .userCache:
-            return loc.currentLanguage == .chinese ? "应用程序产生的临时缓存文件" : "Temporary cache files from applications"
+            return loc.currentLanguage == .chinese ? "应用程序产生的临时缓存文件" : "Temporary cache files from apps"
+        case .systemCache:
+            return loc.currentLanguage == .chinese ? "macOS 系统产生的缓存" : "macOS system cache files"
         case .userLogs:
-            return loc.currentLanguage == .chinese ? "应用程序运行日志和崩溃报告" : "App logs and crash reports"
-        case .trash:
-            return loc.currentLanguage == .chinese ? "废纸篓中的已删除文件" : "Deleted files in Trash"
+            return loc.currentLanguage == .chinese ? "应用程序运行日志" : "Application logs"
+        case .systemLogs:
+            return loc.currentLanguage == .chinese ? "macOS 系统日志文件" : "macOS system log files"
         case .browserCache:
-            return loc.currentLanguage == .chinese ? "Chrome、Safari 等浏览器的临时文件" : "Temp files from Chrome, Safari, etc."
+            return loc.currentLanguage == .chinese ? "Chrome、Safari、Firefox 等浏览器缓存" : "Chrome, Safari, Firefox cache"
         case .appCache:
-            return loc.currentLanguage == .chinese ? "邮件附件、微信等应用的缓存文件" : "Cache from Mail, WeChat, etc."
+            return loc.currentLanguage == .chinese ? "各种应用的临时文件" : "Temp files from various apps"
+        case .chatCache:
+            return loc.currentLanguage == .chinese ? "微信、QQ、Telegram 等聊天记录缓存" : "WeChat, QQ, Telegram cache"
+        case .mailAttachments:
+            return loc.currentLanguage == .chinese ? "邮件下载的附件文件" : "Downloaded mail attachments"
+        case .crashReports:
+            return loc.currentLanguage == .chinese ? "应用崩溃产生的诊断报告" : "Crash diagnostic reports"
+        case .tempFiles:
+            return loc.currentLanguage == .chinese ? "系统和应用产生的临时文件" : "System and app temp files"
         case .xcodeDerivedData:
-            return loc.currentLanguage == .chinese ? "Xcode 编译产生的中间文件" : "Intermediate build files from Xcode"
+            return loc.currentLanguage == .chinese ? "Xcode 编译产生的中间文件" : "Xcode build cache"
         }
     }
     

@@ -8,80 +8,89 @@ struct DeepCleanView: View {
     @State private var showResult = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
-            
-            // Disk Usage
-            DiskUsageView()
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-            
-            // Content
-            if scanner.isScanning {
-                Spacer()
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                    Text(scanner.scanProgress)
-                        .foregroundColor(.secondaryText)
-                        .font(.subheadline)
-                }
-                Spacer()
-            } else if scanner.orphanedItems.isEmpty {
-                Spacer()
-                VStack(spacing: 16) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 64))
-                        .foregroundColor(.green.opacity(0.6))
-                    Text(loc.currentLanguage == .chinese ? "系统很干净!" : "System is Clean!")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white.opacity(0.9))
-                    Text(loc.L("no_orphaned_files"))
-                        .font(.subheadline)
-                        .foregroundColor(.tertiaryText)
-                    
-                    Button(action: { Task { await scanner.scan() } }) {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                            Text(loc.currentLanguage == .chinese ? "重新扫描" : "Rescan")
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
+        ZStack {
+            VStack(spacing: 0) {
+                // Header
+                headerView
+                
+                // Disk Usage
+                DiskUsageView()
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                
+                // Content
+                if scanner.isScanning {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text(scanner.scanProgress)
+                            .foregroundColor(.secondaryText)
+                            .font(.subheadline)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.white.opacity(0.7))
-                }
-                Spacer()
-            } else {
-                // Results List
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        // Group by type
-                        ForEach(OrphanedType.allCases, id: \.self) { type in
-                            let typeItems = scanner.orphanedItems.filter { $0.type == type }
-                            if !typeItems.isEmpty {
-                                OrphanedTypeSection(
-                                    type: type,
-                                    items: typeItems,
-                                    loc: loc,
-                                    onToggle: { item in
-                                        scanner.toggleSelection(for: item)
-                                    }
-                                )
+                    Spacer()
+                } else if scanner.orphanedItems.isEmpty {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 64))
+                            .foregroundColor(.green.opacity(0.6))
+                        Text(loc.currentLanguage == .chinese ? "系统很干净!" : "System is Clean!")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.9))
+                        Text(loc.L("no_orphaned_files"))
+                            .font(.subheadline)
+                            .foregroundColor(.tertiaryText)
+                        
+                        Button(action: { Task { await scanner.scan() } }) {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                Text(loc.currentLanguage == .chinese ? "重新扫描" : "Rescan")
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(8)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.white.opacity(0.7))
                     }
-                    .padding(24)
+                    Spacer()
+                } else {
+                    // Results List
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            // Group by type
+                            ForEach(OrphanedType.allCases, id: \.self) { type in
+                                let typeItems = scanner.orphanedItems.filter { $0.type == type }
+                                if !typeItems.isEmpty {
+                                    OrphanedTypeSection(
+                                        type: type,
+                                        items: typeItems,
+                                        loc: loc,
+                                        onToggle: { item in
+                                            scanner.toggleSelection(for: item)
+                                        }
+                                    )
+                                }
+                            }
+                            
+                            // 底部留白
+                            Color.clear.frame(height: 150)
+                        }
+                        .padding(24)
+                    }
                 }
             }
             
-            // Footer
+            // 底部悬浮按钮
             if !scanner.orphanedItems.isEmpty && !scanner.isScanning {
-                footerView
+                VStack {
+                    Spacer()
+                    cleanButton
+                        .padding(.bottom, 10)
+                }
             }
         }
         .onAppear {
@@ -168,39 +177,44 @@ struct DeepCleanView: View {
         .padding(24)
     }
     
-    private var footerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(loc.currentLanguage == .chinese ? "已选择 \(scanner.selectedCount) / \(scanner.orphanedItems.count) 个项目" : "Selected \(scanner.selectedCount) / \(scanner.orphanedItems.count) items")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text(loc.currentLanguage == .chinese ? "共 \(ByteCountFormatter.string(fromByteCount: scanner.selectedSize, countStyle: .file))" : "Total: \(ByteCountFormatter.string(fromByteCount: scanner.selectedSize, countStyle: .file))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondaryText)
-            }
-            
-            Spacer()
-            
-            Button(action: { showCleanConfirmation = true }) {
-                HStack {
-                    Image(systemName: "trash")
+    // MARK: - 清理按钮 (大圆圈)
+    private var cleanButton: some View {
+        Button(action: { showCleanConfirmation = true }) {
+            ZStack {
+                // 外圈光晕
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(red: 0.0, green: 0.4, blue: 0.3).opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+                
+                // 主圆圈
+                Circle()
+                    .fill(GradientStyles.deepClean)
+                    .frame(width: 90, height: 90)
+                    .shadow(color: Color(red: 0.0, green: 0.4, blue: 0.3).opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                // 内容
+                VStack(spacing: 2) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
                     Text(loc.L("deep_clean"))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(ByteCountFormatter.string(fromByteCount: scanner.selectedSize, countStyle: .file))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.9))
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    scanner.selectedCount > 0 
-                        ? GradientStyles.deepClean 
-                        : LinearGradient(colors: [.gray], startPoint: .leading, endPoint: .trailing)
-                )
-                .foregroundColor(.white)
-                .cornerRadius(10)
             }
-            .buttonStyle(.plain)
-            .disabled(scanner.selectedCount == 0)
         }
-        .padding(24)
-        .background(Color.black.opacity(0.2))
+        .buttonStyle(.plain)
+        .disabled(scanner.selectedCount == 0)
     }
 }
 

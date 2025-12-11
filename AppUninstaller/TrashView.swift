@@ -6,6 +6,7 @@ struct TrashItem: Identifiable {
     let name: String
     let size: Int64
     let dateDeleted: Date?
+    let isDirectory: Bool
     
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
@@ -58,13 +59,16 @@ class TrashScanner: ObservableObject {
             
             for fileURL in contents {
                 let size = calculateSize(at: fileURL)
-                let date = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isDirectoryKey])
+                let date = resourceValues?.contentModificationDate
+                let isDir = resourceValues?.isDirectory ?? false
                 
                 let item = TrashItem(
                     url: fileURL,
                     name: fileURL.lastPathComponent,
                     size: size,
-                    dateDeleted: date
+                    dateDeleted: date,
+                    isDirectory: isDir
                 )
                 scannedItems.append(item)
                 total += size
@@ -97,6 +101,62 @@ class TrashScanner: ObservableObject {
         }
     }
     
+    // 扫描指定文件夹（用于详情查看）
+    func scanDirectory(_ url: URL) -> [TrashItem] {
+        var items: [TrashItem] = []
+        let fileManager = FileManager.default
+        
+        guard let contents = try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey]) else {
+            return []
+        }
+        
+        for fileURL in contents {
+            let size = calculateSize(at: fileURL)
+            let resourceValues = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isDirectoryKey])
+            let date = resourceValues?.contentModificationDate
+            let isDir = resourceValues?.isDirectory ?? false
+            
+            items.append(TrashItem(
+                url: fileURL,
+                name: fileURL.lastPathComponent,
+                size: size,
+                dateDeleted: date,
+                isDirectory: isDir
+            ))
+        }
+        
+        return items.sorted { $0.size > $1.size }
+    }
+    
+    // 放回原处
+    func putBack(_ item: TrashItem) {
+        let script = """
+        tell application "Finder"
+            activate
+            try
+                set targetItem to (POSIX file "\(item.url.path)") as alias
+                select targetItem
+                tell application "System Events"
+                    key code 51 using {command down}
+                end tell
+            on error
+                -- ignore
+            end try
+        end tell
+        """
+        
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+        }
+        
+        // 稍后刷新
+        Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await scan()
+        }
+    }
+    
     func openSystemPreferences() {
         // 打开系统设置的隐私与安全性 - 完全磁盘访问权限
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
@@ -114,14 +174,19 @@ class TrashScanner: ObservableObject {
             set trashItems to items of trash
             set output to ""
             repeat with anItem in trashItems
-                set itemPath to POSIX path of (anItem as alias)
-                set itemName to name of anItem
                 try
+                    set itemPath to POSIX path of (anItem as alias)
+                    set itemName to name of anItem
                     set itemSize to size of anItem
                 on error
+                    set itemPath to ""
+                    set itemName to ""
                     set itemSize to 0
                 end try
-                set output to output & itemPath & "|||" & itemName & "|||" & itemSize & "\\n"
+                if itemPath is not "" then
+                    set isFolder to (class of anItem is folder)
+                    set output to output & itemPath & "|||" & itemName & "|||" & itemSize & "|||" & isFolder & "\\n"
+                end if
             end repeat
             return output
         end tell
@@ -152,6 +217,7 @@ class TrashScanner: ObservableObject {
                     let name = parts[1].trimmingCharacters(in: .whitespaces)
                     let sizeStr = parts[2].trimmingCharacters(in: .whitespacesAndNewlines)
                     let size = Int64(sizeStr) ?? 0
+                    let isFolder = parts.count > 3 ? (parts[3].trimmingCharacters(in: .whitespacesAndNewlines) == "true") : false
                     
                     let fileURL = URL(fileURLWithPath: path)
                     
@@ -162,7 +228,8 @@ class TrashScanner: ObservableObject {
                         url: fileURL,
                         name: name,
                         size: size,
-                        dateDeleted: date
+                        dateDeleted: date,
+                        isDirectory: isFolder
                     )
                     scannedItems.append(item)
                     total += size
@@ -226,91 +293,18 @@ struct TrashView: View {
     @State private var showEmptyConfirmation = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
-            
-            // Disk Usage
-            DiskUsageView()
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
-            
-            // Content
-            if scanner.isScanning {
-                Spacer()
-                ProgressView()
-                    .scaleEffect(0.8)
-                Text(loc.currentLanguage == .chinese ? "正在扫描废纸篓..." : "Scanning Trash...")
-                    .foregroundColor(.secondaryText)
-                    .padding(.top, 8)
-                Spacer()
-            } else if scanner.needsPermission {
-                // 需要权限
-                Spacer()
-                VStack(spacing: 20) {
-                    Image(systemName: "lock.shield")
-                        .font(.system(size: 64))
-                        .foregroundColor(.orange.opacity(0.6))
-                    Text(loc.currentLanguage == .chinese ? "需要访问权限" : "Permission Required")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white.opacity(0.9))
-                    Text(loc.currentLanguage == .chinese ? "查看废纸篓内容需要「完全磁盘访问权限」" : "Full Disk Access is required to view Trash contents")
-                        .font(.subheadline)
-                        .foregroundColor(.tertiaryText)
-                        .multilineTextAlignment(.center)
-                    
-                    Button(action: { scanner.openSystemPreferences() }) {
-                        HStack {
-                            Image(systemName: "gearshape")
-                            Text(loc.currentLanguage == .chinese ? "授权访问" : "Grant Access")
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.8))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 8)
-                    
-                    Text(loc.currentLanguage == .chinese ? "授权后点击「刷新」按钮" : "Click Refresh after granting access")
-                        .font(.caption)
-                        .foregroundColor(.tertiaryText)
-                }
-                .padding()
-                Spacer()
-            } else if scanner.items.isEmpty {
-                Spacer()
-                VStack(spacing: 16) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 64))
-                        .foregroundColor(.white.opacity(0.2))
-                    Text(loc.L("trash_empty"))
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.5))
-                    Text(loc.currentLanguage == .chinese ? "已删除的文件会显示在这里" : "Deleted files will appear here")
-                        .font(.subheadline)
-                        .foregroundColor(.tertiaryText)
-                }
-                Spacer()
-            } else {
-                // Item List
-                List {
-                    ForEach(scanner.items) { item in
-                        TrashItemRow(item: item)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+        NavigationStack {
+            ZStack {
+                mainContent
+                
+                // Floating Button
+                if !scanner.items.isEmpty {
+                    VStack {
+                        Spacer()
+                        emptyButton
+                            .padding(.bottom, 10)
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-            }
-            
-            // Footer
-            if !scanner.items.isEmpty {
-                footerView
             }
         }
         .onAppear {
@@ -323,6 +317,147 @@ struct TrashView: View {
             Button(loc.L("cancel"), role: .cancel) {}
         } message: {
             Text(loc.currentLanguage == .chinese ? "此操作不可撤销，所有文件将被永久删除。" : "This cannot be undone. All files will be permanently deleted.")
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            headerView
+            
+            DiskUsageView()
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            
+            if scanner.isScanning {
+                scanningView
+            } else if scanner.needsPermission {
+                permissionView
+            } else if scanner.items.isEmpty {
+                emptyStateView
+            } else {
+                itemListView
+            }
+        }
+    }
+    
+    private var scanningView: some View {
+        VStack {
+            Spacer()
+            ProgressView().scaleEffect(0.8)
+            Text(loc.currentLanguage == .chinese ? "正在扫描废纸篓..." : "Scanning Trash...")
+                .foregroundColor(.secondaryText)
+                .padding(.top, 8)
+            Spacer()
+        }
+    }
+    
+    private var permissionView: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 20) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 64))
+                    .foregroundColor(.orange.opacity(0.6))
+                Text(loc.currentLanguage == .chinese ? "需要访问权限" : "Permission Required")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white.opacity(0.9))
+                Text(loc.currentLanguage == .chinese ? "查看废纸篓内容需要「完全磁盘访问权限」" : "Full Disk Access is required to view Trash contents")
+                    .font(.subheadline)
+                    .foregroundColor(.tertiaryText)
+                    .multilineTextAlignment(.center)
+                
+                Button(action: { scanner.openSystemPreferences() }) {
+                    HStack {
+                        Image(systemName: "gearshape")
+                        Text(loc.currentLanguage == .chinese ? "授权访问" : "Grant Access")
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.orange.opacity(0.8))
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+                
+                Text(loc.currentLanguage == .chinese ? "授权后点击「刷新」按钮" : "Click Refresh after granting access")
+                    .font(.caption)
+                    .foregroundColor(.tertiaryText)
+            }
+            .padding()
+            Spacer()
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 16) {
+                Image(systemName: "trash")
+                    .font(.system(size: 64))
+                    .foregroundColor(.white.opacity(0.2))
+                Text(loc.L("trash_empty"))
+                    .font(.title2)
+                    .foregroundColor(.white.opacity(0.5))
+                Text(loc.currentLanguage == .chinese ? "已删除的文件会显示在这里" : "Deleted files will appear here")
+                    .font(.subheadline)
+                    .foregroundColor(.tertiaryText)
+            }
+            Spacer()
+        }
+    }
+    
+    private var itemListView: some View {
+        List {
+            ForEach(scanner.items) { item in
+                itemRow(for: item)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            
+            Color.clear.frame(height: 150)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+    
+    @ViewBuilder
+    private func itemRow(for item: TrashItem) -> some View {
+        Group {
+            if item.isDirectory {
+                NavigationLink(destination: TrashDirectoryView(url: item.url)) {
+                    TrashItemRow(item: item)
+                }
+            } else {
+                TrashItemRow(item: item)
+            }
+        }
+        .contextMenu {
+            Button {
+                scanner.putBack(item)
+            } label: {
+                Label(loc.currentLanguage == .chinese ? "放回原处" : "Put Back", systemImage: "arrow.uturn.backward")
+            }
+            
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            } label: {
+                Label(loc.L("show_in_finder"), systemImage: "folder")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                try? FileManager.default.removeItem(at: item.url)
+                Task { await scanner.scan() }
+            } label: {
+                Label(loc.currentLanguage == .chinese ? "立即删除" : "Delete Immediately", systemImage: "trash")
+            }
         }
     }
     
@@ -353,36 +488,49 @@ struct TrashView: View {
             .buttonStyle(.plain)
         }
         .padding(24)
+        // 隐藏主视图的默认导航栏，保留自定义 Header
+        #if os(macOS)
+        .toolbar(.hidden, for: .windowToolbar)
+        #endif
     }
     
-    private var footerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(loc.currentLanguage == .chinese ? "\(scanner.items.count) 个项目" : "\(scanner.items.count) items")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text(loc.currentLanguage == .chinese ? "共 \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))" : "Total: \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondaryText)
-            }
-            
-            Spacer()
-            
-            Button(action: { showEmptyConfirmation = true }) {
-                HStack {
-                    Image(systemName: "trash.slash")
+    // MARK: - 清空按钮 (大圆圈)
+    private var emptyButton: some View {
+        Button(action: { showEmptyConfirmation = true }) {
+            ZStack {
+                // 外圈光晕
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(red: 0.7, green: 0.1, blue: 0.1).opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+                
+                // 主圆圈
+                Circle()
+                    .fill(GradientStyles.trash)
+                    .frame(width: 90, height: 90)
+                    .shadow(color: Color(red: 0.7, green: 0.1, blue: 0.1).opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                // 内容
+                VStack(spacing: 2) {
+                    Image(systemName: "trash.slash.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
                     Text(loc.L("empty_trash"))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.9))
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(GradientStyles.danger)
-                .foregroundColor(.white)
-                .cornerRadius(10)
             }
-            .buttonStyle(.plain)
         }
-        .padding(24)
-        .background(Color.black.opacity(0.2))
+        .buttonStyle(.plain)
     }
 }
 
@@ -415,5 +563,65 @@ struct TrashItemRow: View {
         .padding(12)
         .background(Color.white.opacity(0.05))
         .cornerRadius(10)
+    }
+}
+
+struct TrashDirectoryView: View {
+    let url: URL
+    @State private var items: [TrashItem] = []
+    @StateObject private var scanner = TrashScanner()
+    @ObservedObject private var loc = LocalizationManager.shared
+    
+    var body: some View {
+        List {
+            if items.isEmpty {
+                Text(loc.currentLanguage == .chinese ? "空文件夹" : "Empty Folder")
+                    .foregroundColor(.secondaryText)
+                    .padding()
+            } else {
+                ForEach(items) { item in
+                    itemRow(for: item)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.mainBackground)
+        .navigationTitle(url.lastPathComponent)
+        .onAppear {
+            items = scanner.scanDirectory(url)
+        }
+    }
+    
+    @ViewBuilder
+    private func itemRow(for item: TrashItem) -> some View {
+        Group {
+            if item.isDirectory {
+                NavigationLink(destination: TrashDirectoryView(url: item.url)) {
+                    TrashItemRow(item: item)
+                }
+            } else {
+                TrashItemRow(item: item)
+            }
+        }
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([item.url])
+            } label: {
+                Label(loc.L("show_in_finder"), systemImage: "folder")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                try? FileManager.default.removeItem(at: item.url)
+                items = scanner.scanDirectory(url)
+            } label: {
+                Label(loc.currentLanguage == .chinese ? "立即删除" : "Delete Immediately", systemImage: "trash")
+            }
+        }
     }
 }

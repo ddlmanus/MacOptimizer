@@ -1,0 +1,107 @@
+[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;34m    Mac优化大师 (MacOptimizer) 构建脚本[0m
+[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[1;33m[1/5] 检查源文件...[0m
+[0;32m✓ 所有源文件存在[0m
+[1;33m[2/5] 准备构建目录...[0m
+[0;32m✓ 构建目录已创建[0m
+[1;33m[3/5] 复制配置文件...[0m
+[0;32m✓ Info.plist 和 AppIcon.icns 已复制[0m
+[1;33m[4/5] 编译 Swift 源代码...[0m
+AppUninstaller/AppScanner.swift:51:20: warning: reference to captured var 'scannedApps' in concurrently-executing code; this is an error in the Swift 6 language mode
+ 49 |         
+ 50 |         await MainActor.run {
+ 51 |             apps = scannedApps
+    |                    `- warning: reference to captured var 'scannedApps' in concurrently-executing code; this is an error in the Swift 6 language mode
+ 52 |             isScanning = false
+ 53 |         }
+
+AppUninstaller/AppScanner.swift:104:32: warning: conformance of 'NSImage' to 'Sendable' is unavailable; this is an error in the Swift 6 language mode
+102 |         
+103 |         // 使用NSWorkspace获取图标
+104 |         return await MainActor.run {
+    |                                `- warning: conformance of 'NSImage' to 'Sendable' is unavailable; this is an error in the Swift 6 language mode
+105 |             NSWorkspace.shared.icon(forFile: url.path)
+106 |         }
+
+:1:1: note: conformance of 'NSImage' to 'Sendable' has been explicitly marked unavailable here
+1 | @_nonSendable(_assumed)
+  | `- note: conformance of 'NSImage' to 'Sendable' has been explicitly marked unavailable here
+
+AppUninstaller/LargeFileView.swift:288:43: warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
+286 |     
+287 |     var body: some View {
+288 |         Image(nsImage: NSWorkspace.shared.icon(forFileType: (filename as NSString).pathExtension))
+    |                                           `- warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
+289 |             .resizable()
+290 |     }
+
+AppUninstaller/DeepCleanScanner.swift:184:25: warning: reference to captured var 'total' in concurrently-executing code; this is an error in the Swift 6 language mode
+182 |         await MainActor.run {
+183 |             orphanedItems = sortedItems
+184 |             totalSize = total
+    |                         `- warning: reference to captured var 'total' in concurrently-executing code; this is an error in the Swift 6 language mode
+185 |             isScanning = false
+186 |             scanProgress = ""
+
+AppUninstaller/SystemMonitorService.swift:72:21: warning: variable 'pagesFree' was written to, but never read
+ 70 |                 let lines = output.components(separatedBy: "\n")
+ 71 |                 var pageSize: UInt64 = 4096 // Default
+ 72 |                 var pagesFree: UInt64 = 0
+    |                     `- warning: variable 'pagesFree' was written to, but never read
+ 73 |                 var pagesActive: UInt64 = 0
+ 74 |                 var pagesInactive: UInt64 = 0
+
+AppUninstaller/SystemMonitorService.swift:74:21: warning: variable 'pagesInactive' was written to, but never read
+ 72 |                 var pagesFree: UInt64 = 0
+ 73 |                 var pagesActive: UInt64 = 0
+ 74 |                 var pagesInactive: UInt64 = 0
+    |                     `- warning: variable 'pagesInactive' was written to, but never read
+ 75 |                 var pagesSpeculative: UInt64 = 0
+ 76 |                 var pagesWired: UInt64 = 0
+
+AppUninstaller/SystemMonitorService.swift:75:21: warning: variable 'pagesSpeculative' was written to, but never read
+ 73 |                 var pagesActive: UInt64 = 0
+ 74 |                 var pagesInactive: UInt64 = 0
+ 75 |                 var pagesSpeculative: UInt64 = 0
+    |                     `- warning: variable 'pagesSpeculative' was written to, but never read
+ 76 |                 var pagesWired: UInt64 = 0
+ 77 |                 var pagesCompressed: UInt64 = 0
+
+AppUninstaller/JunkCleaner.swift:206:30: warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
+204 |         
+205 |         await MainActor.run {
+206 |             self.junkItems = items
+    |                              `- warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
+207 |             isScanning = false
+208 |         }
+
+AppUninstaller/SystemOptimizer.swift:254:21: warning: initialization of immutable value 'result' was never used; consider replacing with assignment to '_' or removing it
+252 |                 message = result.success ? getSuccessMessage(for: type) : "执行失败: \(result.output)"
+253 |             } else {
+254 |                 let result = runCommand(type.command)
+    |                     `- warning: initialization of immutable value 'result' was never used; consider replacing with assignment to '_' or removing it
+255 |                 success = true
+256 |                 message = getSuccessMessage(for: type)
+
+AppUninstaller/SystemOptimizer.swift:262:34: warning: reference to captured var 'message' in concurrently-executing code; this is an error in the Swift 6 language mode
+260 |         await MainActor.run {
+261 |             isOptimizing = false
+262 |             optimizationResult = message
+    |                                  `- warning: reference to captured var 'message' in concurrently-executing code; this is an error in the Swift 6 language mode
+263 |         }
+264 |         
+[0;32m✓ 编译成功[0m
+[1;33m[5/5] 签名应用...[0m
+build/Mac优化大师.app: replacing existing signature
+[0;32m✓ 签名完成[0m
+
+[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;32m构建完成！[0m
+[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+应用位置: [1;33mbuild/Mac优化大师.app[0m
+
+运行命令: [1;33mopen build/Mac优化大师.app[0m
+

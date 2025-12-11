@@ -39,115 +39,115 @@ struct LargeFileView: View {
     var body: some View {
         HSplitView {
             // Left: File List
-            VStack(spacing: 0) {
-                // Disk Usage
-                DiskUsageView()
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                
-                // Header
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(loc.L("largeFiles"))
-                            .font(.headline)
-                            .foregroundColor(.white)
+            ZStack {
+                VStack(spacing: 0) {
+                    // Disk Usage
+                    DiskUsageView()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
+                    
+                    // Header
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(loc.L("largeFiles"))
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            if !scanner.isScanning {
+                                Text(loc.currentLanguage == .chinese ? "发现 \(scanner.foundFiles.count) 个文件 · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))" : "Found \(scanner.foundFiles.count) files · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondaryText)
+                            }
+                        }
+                        
+                        Spacer()
+                        
                         if !scanner.isScanning {
-                            Text(loc.currentLanguage == .chinese ? "发现 \(scanner.foundFiles.count) 个文件 · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))" : "Found \(scanner.foundFiles.count) files · \(ByteCountFormatter.string(fromByteCount: scanner.totalSize, countStyle: .file))")
+                            Menu {
+                                ForEach([SortOption.sizeDesc, .sizeAsc, .nameAsc, .nameDesc], id: \.self) { option in
+                                    Button(option.title) { sortOrder = option }
+                                }
+                            } label: {
+                                Image(systemName: "arrow.up.arrow.down")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
+                        
+                        Button(action: { Task { await scanner.scan() } }) {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(scanner.isScanning ? .secondary : .white)
+                                .rotationEffect(.degrees(scanner.isScanning ? 360 : 0))
+                                .animation(scanner.isScanning ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: scanner.isScanning)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(scanner.isScanning)
+                    }
+                    .padding(16)
+                    .background(Color.black.opacity(0.2))
+                    
+                    // List
+                    if scanner.isScanning && scanner.foundFiles.isEmpty {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text(loc.currentLanguage == .chinese ? "正在扫描大文件..." : "Scanning large files...")
+                                .foregroundColor(.secondaryText)
+                            Text(loc.currentLanguage == .chinese ? "已扫描 \(scanner.scannedCount) 个项目" : "Scanned \(scanner.scannedCount) items")
                                 .font(.caption)
+                                .foregroundColor(.tertiaryText)
+                        }
+                        Spacer()
+                    } else if scanner.foundFiles.isEmpty {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass.circle")
+                                .font(.system(size: 48))
+                                .foregroundColor(.secondaryText)
+                            Text(loc.currentLanguage == .chinese ? "点击刷新开始扫描\n(仅扫描 >50MB 文件)" : "Click refresh to scan\n(Only files >50MB)")
+                                .multilineTextAlignment(.center)
                                 .foregroundColor(.secondaryText)
                         }
-                    }
-                    
-                    Spacer()
-                    
-                    if !scanner.isScanning {
-                        Menu {
-                            ForEach([SortOption.sizeDesc, .sizeAsc, .nameAsc, .nameDesc], id: \.self) { option in
-                                Button(option.title) { sortOrder = option }
-                            }
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                    }
-                    
-                    Button(action: { Task { await scanner.scan() } }) {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundColor(scanner.isScanning ? .secondary : .white)
-                            .rotationEffect(.degrees(scanner.isScanning ? 360 : 0))
-                            .animation(scanner.isScanning ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: scanner.isScanning)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(scanner.isScanning)
-                }
-                .padding(16)
-                .background(Color.black.opacity(0.2))
-                
-                // List
-                if scanner.isScanning && scanner.foundFiles.isEmpty {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                        Text(loc.currentLanguage == .chinese ? "正在扫描大文件..." : "Scanning large files...")
-                            .foregroundColor(.secondaryText)
-                        Text(loc.currentLanguage == .chinese ? "已扫描 \(scanner.scannedCount) 个项目" : "Scanned \(scanner.scannedCount) items")
-                            .font(.caption)
-                            .foregroundColor(.tertiaryText)
-                    }
-                    Spacer()
-                } else if scanner.foundFiles.isEmpty {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass.circle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondaryText)
-                        Text(loc.currentLanguage == .chinese ? "点击刷新开始扫描\n(仅扫描 >50MB 文件)" : "Click refresh to scan\n(Only files >50MB)")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondaryText)
-                    }
-                    Spacer()
-                } else {
-                    List(selection: $selectedFiles) {
-                        ForEach(sortedFiles) { file in
-                            LargeFileRow(file: file, isSelected: selectedFiles.contains(file.id))
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if selectedFiles.contains(file.id) {
-                                        selectedFiles.remove(file.id)
-                                    } else {
-                                        selectedFiles.insert(file.id)
+                        Spacer()
+                    } else {
+                        List(selection: $selectedFiles) {
+                            ForEach(sortedFiles) { file in
+                                LargeFileRow(file: file, isSelected: selectedFiles.contains(file.id))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if selectedFiles.contains(file.id) {
+                                            selectedFiles.remove(file.id)
+                                        } else {
+                                            selectedFiles.insert(file.id)
+                                        }
+                                        selectedFile = file
                                     }
-                                    selectedFile = file
-                                }
-                                .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                            }
+                            
+                            // Bottom padding for list content
+                            Color.clear.frame(height: 150)
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                 }
                 
-                // Bottom Bar
-                HStack {
-                    Text(loc.currentLanguage == .chinese ? "已选择: \(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))" : "Selected: \(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))")
-                        .font(.caption)
-                        .foregroundColor(.secondaryText)
-                    Spacer()
-                    Button(loc.L("permanently_delete")) {
-                        showDeleteConfirmation = true
+                // Floating Delete Button
+                if !scanner.foundFiles.isEmpty {
+                    VStack {
+                        Spacer()
+                        deleteButton
+                            .padding(.bottom, 10)
                     }
-                    .buttonStyle(CapsuleButtonStyle(gradient: GradientStyles.danger))
-                    .disabled(selectedFiles.isEmpty)
-                    .opacity(selectedFiles.isEmpty ? 0.5 : 1)
                 }
-                .padding(16)
-                .background(Color.black.opacity(0.2))
             }
             .frame(minWidth: 300, maxWidth: 450)
             
@@ -193,6 +193,46 @@ struct LargeFileView: View {
         } message: {
             Text(loc.currentLanguage == .chinese ? "此操作不可撤销，文件将被直接删除。" : "This action cannot be undone. Files will be permanently deleted.")
         }
+    }
+    // MARK: - 圆形删除按钮
+    private var deleteButton: some View {
+        Button(action: { showDeleteConfirmation = true }) {
+            ZStack {
+                // 外圈光晕
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(red: 0.3, green: 0.0, blue: 0.6).opacity(0.3), Color.clear],
+                            center: .center,
+                            startRadius: 40,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+                
+                // 主圆圈
+                Circle()
+                    .fill(GradientStyles.largeFiles)
+                    .frame(width: 90, height: 90)
+                    .shadow(color: Color(red: 0.3, green: 0.0, blue: 0.6).opacity(0.5), radius: 15, x: 0, y: 8)
+                
+                // 内容
+                VStack(spacing: 2) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                    Text(loc.currentLanguage == .chinese ? "删除" : "Delete")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(ByteCountFormatter.string(fromByteCount: totalSelectedSize, countStyle: .file))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedFiles.isEmpty)
+        .opacity(selectedFiles.isEmpty ? 0.6 : 1.0)
     }
 }
 
