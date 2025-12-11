@@ -13,14 +13,14 @@
   <img src="https://img.shields.io/badge/Swift-5.9-orange.svg" alt="Swift">
   <img src="https://img.shields.io/badge/SwiftUI-4.0-purple.svg" alt="SwiftUI">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.1.0-brightgreen.svg" alt="Version">
 </p>
 
 ---
 
 ## ✨ 功能特性
 
-Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化的 SwiftUI 界面,提供六大核心功能模块:
+Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化的 SwiftUI 界面,提供八大核心功能模块:
 
 ### 🖥️ 控制台 (系统监控)
 - **CPU 占用率** - 实时监控 CPU 使用情况
@@ -67,6 +67,24 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
 - **空间统计** - 显示废纸篓占用空间
 - **一键清空** - 快速清空废纸篓释放空间
 
+### ✨ 深度清理 (新功能)
+- **孤立文件扫描** - 扫描已卸载应用的残留文件
+- **智能识别** - 自动识别不属于任何已安装应用的文件
+- **系统保护** - 自动排除 Apple 系统文件,防止误删
+- **分类展示** - 按类型分组:应用支持、缓存、偏好设置、容器、日志等
+- **选择性清理** - 支持全选/反选,自由选择要清理的项目
+- **安全删除** - 文件移至废纸篓,可恢复
+
+### 📁 文件管理 (新功能)
+- **磁盘浏览** - 浏览整个 Mac 磁盘目录结构
+- **快捷访问** - 主目录、桌面、文稿、下载、应用程序、磁盘根目录
+- **导航功能** - 前进/后退/上级目录 + 面包屑路径栏
+- **路径输入** - 支持手动输入路径快速跳转 (支持 `~` 主目录)
+- **文件操作** - 新建文件夹、新建文件、重命名、删除
+- **显示隐藏文件** - 可切换显示/隐藏系统隐藏文件
+- **终端集成** - 一键在系统终端中打开当前目录
+- **右键菜单** - 打开、在 Finder 中显示、重命名、删除
+
 ---
 
 ## 📸 界面预览
@@ -77,9 +95,11 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具,采用现代化
 |:---:|:---:|
 | 控制台 | 青色 (科技感) |
 | 应用卸载 | 蓝色 (智能/冷静) |
+| 深度清理 | 翡翠绿 (深度/精准) |
 | 垃圾清理 | 紫色 (深度/清理) |
 | 系统优化 | 橙色 (活力/加速) |
 | 大文件查找 | 深紫色 (探索/宇宙) |
+| 文件管理 | 钢蓝色 (专业/稳定) |
 | 废纸篓 | 红色 (删除/清理) |
 
 ---
@@ -162,11 +182,17 @@ MacOptimizer/
 │   ├── DiskSpaceManager.swift   # 磁盘空间管理
 │   ├── DiskUsageView.swift      # 磁盘使用视图
 │   │
+│   ├── DeepCleanScanner.swift   # 深度清理扫描器
+│   ├── DeepCleanView.swift      # 深度清理视图
+│   │
+│   ├── FileExplorerService.swift # 文件管理器服务
+│   ├── FileExplorerView.swift   # 文件管理器视图
+│   │
 │   ├── Info.plist               # 应用配置
 │   └── AppIcon.icns             # 应用图标
 │
 ├── build.sh                     # 构建脚本
-├── release_package.sh           # 发布打包脚本
+├── release_package.sh           # 发布打包脚本 (生成 Universal Binary 和 DMG)
 ├── generate_icon.swift          # 图标生成脚本
 └── README.md                    # 项目说明
 ```
