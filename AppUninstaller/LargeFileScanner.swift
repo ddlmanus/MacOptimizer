@@ -32,69 +32,165 @@ class LargeFileScanner: ObservableObject {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser
         
-        var files: [FileItem] = []
-        var total: Int64 = 0
+        // 获取 Home 下的主要子目录，并行扫描
+        let mainDirectories = [
+            "Documents", "Downloads", "Desktop", "Movies", "Music", "Pictures",
+            "Developer", "Projects", "Work", "src", "code"
+        ]
         
-        let options: FileManager.DirectoryEnumerationOptions = [.skipsHiddenFiles, .skipsPackageDescendants]
+        // 需要排除的目录
+        let excludedDirs: Set<String> = ["Library", "Applications", "Public", ".Trash", ".git", "node_modules"]
         
-        // Scan Home Directory directly
-        if let enumerator = fileManager.enumerator(at: home, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey], options: options) {
-            
-            while let fileURL = enumerator.nextObject() as? URL {
-                // Check cancellation (omitted for brevity)
+        // 并发扫描所有主目录
+        let collector = ScanResultCollector<FileItem>()
+        var totalScannedCount = 0
+        
+        await withTaskGroup(of: ([FileItem], Int).self) { group in
+            // 扫描主要子目录
+            for dirName in mainDirectories {
+                let dirURL = home.appendingPathComponent(dirName)
+                guard fileManager.fileExists(atPath: dirURL.path) else { continue }
                 
-                // Exclude specific system-like folders in Home to avoid permission spam or system clutter
-                let relativePath = String(fileURL.path.dropFirst(home.path.count + 1))
-                if relativePath == "Library" || relativePath == "Applications" || relativePath == "Public" {
-                    enumerator.skipDescendants()
-                    continue
+                group.addTask {
+                    await self.scanDirectoryForLargeFiles(dirURL, excludedDirs: excludedDirs)
                 }
+            }
+            
+            // 扫描 Home 目录根级别的大文件（不递归）
+            group.addTask {
+                await self.scanRootLevelFiles(home)
+            }
+            
+            // 收集结果并批量更新 UI
+            var batchFiles: [FileItem] = []
+            var batchSize: Int64 = 0
+            var lastUpdateTime = Date()
+            
+            for await (files, count) in group {
+                batchFiles.append(contentsOf: files)
+                totalScannedCount += count
+                batchSize += files.reduce(0) { $0 + $1.size }
                 
-                do {
-                    let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-                    
-                    if let isDirectory = resourceValues.isDirectory, isDirectory {
-                        continue
-                    }
-                    
-                    if let fileSize = resourceValues.fileSize, Int64(fileSize) > minimumSize {
-                        let item = FileItem(
-                            url: fileURL,
-                            name: fileURL.lastPathComponent,
-                            size: Int64(fileSize),
-                            type: fileURL.pathExtension.isEmpty ? "File" : fileURL.pathExtension.uppercased()
-                        )
-                        files.append(item)
-                        total += Int64(fileSize)
-                        
-                        if files.count % 10 == 0 {
-                            let interimFiles = files
-                            let interimTotal = total
-                            await MainActor.run {
-                                self.foundFiles = interimFiles.sorted(by: { $0.size > $1.size })
-                                self.totalSize = interimTotal
-                            }
-                        }
-                    }
+                // 每 0.2 秒或累积 20 个文件时更新 UI
+                let now = Date()
+                if now.timeIntervalSince(lastUpdateTime) >= 0.2 || batchFiles.count >= 20 {
+                    let currentFiles = batchFiles.sorted(by: { $0.size > $1.size })
+                    let currentTotal = batchSize
+                    let currentCount = totalScannedCount
                     
                     await MainActor.run {
-                        self.scannedCount += 1
+                        self.foundFiles = currentFiles
+                        self.totalSize = currentTotal
+                        self.scannedCount = currentCount
                     }
                     
-                } catch {
-                    // print("Error reading file attributes: \(error)") // Silent fail for permission errors
+                    lastUpdateTime = now
                 }
+                
+                await collector.appendContents(of: files)
             }
         }
         
-        let finalFiles = files.sorted(by: { $0.size > $1.size })
-        let finalTotal = total
+        // 最终结果
+        let finalFiles = await collector.getResults().sorted(by: { $0.size > $1.size })
+        let finalTotal = finalFiles.reduce(0) { $0 + $1.size }
         
         await MainActor.run {
             self.foundFiles = finalFiles
             self.totalSize = finalTotal
+            self.scannedCount = totalScannedCount
             self.isScanning = false
         }
+    }
+    
+    /// 扫描单个目录中的大文件（并发优化版）
+    private func scanDirectoryForLargeFiles(_ directory: URL, excludedDirs: Set<String>) async -> ([FileItem], Int) {
+        let fileManager = FileManager.default
+        var files: [FileItem] = []
+        var scannedCount = 0
+        
+        let options: FileManager.DirectoryEnumerationOptions = [.skipsHiddenFiles, .skipsPackageDescendants]
+        
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+            options: options
+        ) else { return (files, scannedCount) }
+        
+        while let fileURL = enumerator.nextObject() as? URL {
+            scannedCount += 1
+            
+            // 检查是否在排除目录中
+            let fileName = fileURL.lastPathComponent
+            if excludedDirs.contains(fileName) {
+                enumerator.skipDescendants()
+                continue
+            }
+            
+            do {
+                let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                
+                // 跳过目录
+                if let isDirectory = resourceValues.isDirectory, isDirectory {
+                    continue
+                }
+                
+                // 检查文件大小
+                if let fileSize = resourceValues.fileSize, Int64(fileSize) > minimumSize {
+                    let item = FileItem(
+                        url: fileURL,
+                        name: fileURL.lastPathComponent,
+                        size: Int64(fileSize),
+                        type: fileURL.pathExtension.isEmpty ? "File" : fileURL.pathExtension.uppercased()
+                    )
+                    files.append(item)
+                }
+            } catch {
+                // 静默处理权限错误
+            }
+        }
+        
+        return (files, scannedCount)
+    }
+    
+    /// 扫描 Home 根目录级别的大文件（不递归）
+    private func scanRootLevelFiles(_ home: URL) async -> ([FileItem], Int) {
+        let fileManager = FileManager.default
+        var files: [FileItem] = []
+        var scannedCount = 0
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(
+                at: home,
+                includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            
+            for fileURL in contents {
+                scannedCount += 1
+                
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                
+                // 只处理文件，不处理目录
+                if let isDirectory = resourceValues?.isDirectory, isDirectory {
+                    continue
+                }
+                
+                if let fileSize = resourceValues?.fileSize, Int64(fileSize) > minimumSize {
+                    let item = FileItem(
+                        url: fileURL,
+                        name: fileURL.lastPathComponent,
+                        size: Int64(fileSize),
+                        type: fileURL.pathExtension.isEmpty ? "File" : fileURL.pathExtension.uppercased()
+                    )
+                    files.append(item)
+                }
+            }
+        } catch {
+            // 静默处理错误
+        }
+        
+        return (files, scannedCount)
     }
     
     // Helper to get relative path

@@ -9,6 +9,134 @@
 [1;33m[3/5] 复制配置文件...[0m
 [0;32m✓ Info.plist 和 AppIcon.icns 已复制[0m
 [1;33m[4/5] 编译 Swift 源代码...[0m
+AppUninstaller/ConcurrentScanner.swift:103:40: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+101 |         // 批量收集文件 URL，减少锁竞争
+102 |         var fileURLs: [URL] = []
+103 |         for case let fileURL as URL in enumerator {
+    |                                        `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+104 |             fileURLs.append(fileURL)
+105 |         }
+
+AppUninstaller/ConcurrentScanner.swift:153:36: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+151 |     var totalCount = 0
+152 |     
+153 |     for case let fileURL as URL in enumerator {
+    |                                    `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+154 |         totalCount += 1
+155 |         
+
+AppUninstaller/ConcurrentScanner.swift:231:48: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+229 |                 ) else { return items }
+230 |                 
+231 |                 for case let fileURL as URL in enumerator {
+    |                                                `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+232 |                     // 检查是否在排除列表中
+233 |                     let relativePath = fileURL.path.replacingOccurrences(of: directory.path, with: "")
+
+AppUninstaller/ScanServiceManager.swift:38:29: warning: result of call to 'run(resultType:body:)' is unused
+ 36 |         Task {
+ 37 |             await junkCleaner.scanJunk()
+ 38 |             await MainActor.run {
+    |                             `- warning: result of call to 'run(resultType:body:)' is unused
+ 39 |                 activeScans.remove(.junk)
+ 40 |             }
+
+AppUninstaller/ScanServiceManager.swift:50:29: warning: result of call to 'run(resultType:body:)' is unused
+ 48 |         Task {
+ 49 |             await largeFileScanner.scan()
+ 50 |             await MainActor.run {
+    |                             `- warning: result of call to 'run(resultType:body:)' is unused
+ 51 |                 activeScans.remove(.largeFiles)
+ 52 |             }
+
+AppUninstaller/ScanServiceManager.swift:62:29: warning: result of call to 'run(resultType:body:)' is unused
+ 60 |         Task {
+ 61 |             await deepCleanScanner.scan()
+ 62 |             await MainActor.run {
+    |                             `- warning: result of call to 'run(resultType:body:)' is unused
+ 63 |                 activeScans.remove(.deepClean)
+ 64 |             }
+
+AppUninstaller/ScanServiceManager.swift:74:29: warning: result of call to 'run(resultType:body:)' is unused
+ 72 |         Task {
+ 73 |             await smartCleanerService.scanAll()
+ 74 |             await MainActor.run {
+    |                             `- warning: result of call to 'run(resultType:body:)' is unused
+ 75 |                 activeScans.remove(.smartClean)
+ 76 |             }
+
+AppUninstaller/ScanServiceManager.swift:86:29: warning: result of call to 'run(resultType:body:)' is unused
+ 84 |         Task {
+ 85 |             await smartCleanerService.scanDuplicates()
+ 86 |             await MainActor.run {
+    |                             `- warning: result of call to 'run(resultType:body:)' is unused
+ 87 |                 activeScans.remove(.duplicates)
+ 88 |             }
+
+AppUninstaller/ScanServiceManager.swift:119:41: warning: result of call to 'run(resultType:body:)' is unused
+117 |                 group.addTask {
+118 |                     if !self.junkCleaner.isScanning {
+119 |                         await MainActor.run { self.activeScans.insert(.junk) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+120 |                         await self.junkCleaner.scanJunk()
+121 |                         await MainActor.run { self.activeScans.remove(.junk) }
+
+AppUninstaller/ScanServiceManager.swift:121:41: warning: result of call to 'run(resultType:body:)' is unused
+119 |                         await MainActor.run { self.activeScans.insert(.junk) }
+120 |                         await self.junkCleaner.scanJunk()
+121 |                         await MainActor.run { self.activeScans.remove(.junk) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+122 |                     }
+123 |                 }
+
+AppUninstaller/ScanServiceManager.swift:127:41: warning: result of call to 'run(resultType:body:)' is unused
+125 |                 group.addTask {
+126 |                     if !self.largeFileScanner.isScanning {
+127 |                         await MainActor.run { self.activeScans.insert(.largeFiles) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+128 |                         await self.largeFileScanner.scan()
+129 |                         await MainActor.run { self.activeScans.remove(.largeFiles) }
+
+AppUninstaller/ScanServiceManager.swift:129:41: warning: result of call to 'run(resultType:body:)' is unused
+127 |                         await MainActor.run { self.activeScans.insert(.largeFiles) }
+128 |                         await self.largeFileScanner.scan()
+129 |                         await MainActor.run { self.activeScans.remove(.largeFiles) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+130 |                     }
+131 |                 }
+
+AppUninstaller/ScanServiceManager.swift:135:41: warning: result of call to 'run(resultType:body:)' is unused
+133 |                 group.addTask {
+134 |                     if !self.deepCleanScanner.isScanning {
+135 |                         await MainActor.run { self.activeScans.insert(.deepClean) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+136 |                         await self.deepCleanScanner.scan()
+137 |                         await MainActor.run { self.activeScans.remove(.deepClean) }
+
+AppUninstaller/ScanServiceManager.swift:137:41: warning: result of call to 'run(resultType:body:)' is unused
+135 |                         await MainActor.run { self.activeScans.insert(.deepClean) }
+136 |                         await self.deepCleanScanner.scan()
+137 |                         await MainActor.run { self.activeScans.remove(.deepClean) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+138 |                     }
+139 |                 }
+
+AppUninstaller/ScanServiceManager.swift:143:41: warning: result of call to 'run(resultType:body:)' is unused
+141 |                 group.addTask {
+142 |                     if !self.smartCleanerService.isScanning {
+143 |                         await MainActor.run { self.activeScans.insert(.smartClean) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+144 |                         await self.smartCleanerService.scanAll()
+145 |                         await MainActor.run { self.activeScans.remove(.smartClean) }
+
+AppUninstaller/ScanServiceManager.swift:145:41: warning: result of call to 'run(resultType:body:)' is unused
+143 |                         await MainActor.run { self.activeScans.insert(.smartClean) }
+144 |                         await self.smartCleanerService.scanAll()
+145 |                         await MainActor.run { self.activeScans.remove(.smartClean) }
+    |                                         `- warning: result of call to 'run(resultType:body:)' is unused
+146 |                     }
+147 |                 }
+
 AppUninstaller/AppScanner.swift:51:20: warning: reference to captured var 'scannedApps' in concurrently-executing code; this is an error in the Swift 6 language mode
  49 |         
  50 |         await MainActor.run {
@@ -29,21 +157,37 @@ AppUninstaller/AppScanner.swift:104:32: warning: conformance of 'NSImage' to 'Se
 1 | @_nonSendable(_assumed)
   | `- note: conformance of 'NSImage' to 'Sendable' has been explicitly marked unavailable here
 
-AppUninstaller/LargeFileView.swift:288:43: warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
-286 |     
-287 |     var body: some View {
-288 |         Image(nsImage: NSWorkspace.shared.icon(forFileType: (filename as NSString).pathExtension))
-    |                                           `- warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
-289 |             .resizable()
-290 |     }
+AppUninstaller/LargeFileScanner.swift:101:33: warning: reference to captured var 'totalScannedCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+ 99 |             self.foundFiles = finalFiles
+100 |             self.totalSize = finalTotal
+101 |             self.scannedCount = totalScannedCount
+    |                                 `- warning: reference to captured var 'totalScannedCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+102 |             self.isScanning = false
+103 |         }
 
-AppUninstaller/DeepCleanScanner.swift:184:25: warning: reference to captured var 'total' in concurrently-executing code; this is an error in the Swift 6 language mode
-182 |         await MainActor.run {
-183 |             orphanedItems = sortedItems
-184 |             totalSize = total
+AppUninstaller/LargeFileView.swift:585:43: warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
+583 |     
+584 |     var body: some View {
+585 |         Image(nsImage: NSWorkspace.shared.icon(forFileType: (filename as NSString).pathExtension))
+    |                                           `- warning: 'icon(forFileType:)' was deprecated in macOS 12.0: Use -[NSWorkspace iconForContentType:] instead.
+586 |             .resizable()
+587 |     }
+
+AppUninstaller/DeepCleanScanner.swift:203:25: warning: reference to captured var 'total' in concurrently-executing code; this is an error in the Swift 6 language mode
+201 |         await MainActor.run {
+202 |             orphanedItems = sortedItems
+203 |             totalSize = total
     |                         `- warning: reference to captured var 'total' in concurrently-executing code; this is an error in the Swift 6 language mode
-185 |             isScanning = false
-186 |             scanProgress = ""
+204 |             isScanning = false
+205 |             scanProgress = ""
+
+AppUninstaller/DeepCleanScanner.swift:287:44: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+285 |             
+286 |             var fileURLs: [URL] = []
+287 |             for case let fileURL as URL in enumerator {
+    |                                            `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+288 |                 fileURLs.append(fileURL)
+289 |             }
 
 AppUninstaller/SystemMonitorService.swift:72:21: warning: variable 'pagesFree' was written to, but never read
  70 |                 let lines = output.components(separatedBy: "\n")
@@ -69,13 +213,45 @@ AppUninstaller/SystemMonitorService.swift:75:21: warning: variable 'pagesSpecula
  76 |                 var pagesWired: UInt64 = 0
  77 |                 var pagesCompressed: UInt64 = 0
 
-AppUninstaller/JunkCleaner.swift:206:30: warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
-204 |         
-205 |         await MainActor.run {
-206 |             self.junkItems = items
-    |                              `- warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
-207 |             isScanning = false
-208 |         }
+AppUninstaller/PortScannerService.swift:139:34: warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
+137 |                 
+138 |                 await MainActor.run {
+139 |                     self.ports = items
+    |                                  `- warning: reference to captured var 'items' in concurrently-executing code; this is an error in the Swift 6 language mode
+140 |                     self.isScanning = false
+141 |                 }
+
+AppUninstaller/JunkCleaner.swift:373:30: warning: reference to captured var 'allItems' in concurrently-executing code; this is an error in the Swift 6 language mode
+371 |         
+372 |         await MainActor.run {
+373 |             self.junkItems = allItems
+    |                              `- warning: reference to captured var 'allItems' in concurrently-executing code; this is an error in the Swift 6 language mode
+374 |             isScanning = false
+375 |         }
+
+AppUninstaller/JunkCleaner.swift:422:60: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+420 |                         // 递归扫描目录寻找 .dmg / .iso
+421 |                         if let enumerator = self.fileManager.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .contentAccessDateKey], options: [.skipsHiddenFiles]) {
+422 |                             for case let fileURL as URL in enumerator {
+    |                                                            `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+423 |                                 let ext = fileURL.pathExtension.lowercased()
+424 |                                 if ["dmg", "iso", "pkg"].contains(ext) {
+
+AppUninstaller/JunkCleaner.swift:621:44: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+619 |             
+620 |             var fileURLs: [URL] = []
+621 |             for case let fileURL as URL in enumerator {
+    |                                            `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+622 |                 fileURLs.append(fileURL)
+623 |             }
+
+AppUninstaller/JunkCleaner.swift:707:65: warning: reference to captured var 'failedItems' in concurrently-executing code; this is an error in the Swift 6 language mode
+705 |         await MainActor.run {
+706 |             self.junkItems.removeAll { item in
+707 |                 selectedItems.contains { $0.id == item.id } && !failedItems.contains { $0.id == item.id }
+    |                                                                 `- warning: reference to captured var 'failedItems' in concurrently-executing code; this is an error in the Swift 6 language mode
+708 |             }
+709 |         }
 
 AppUninstaller/SystemOptimizer.swift:254:21: warning: initialization of immutable value 'result' was never used; consider replacing with assignment to '_' or removing it
 252 |                 message = result.success ? getSuccessMessage(for: type) : "执行失败: \(result.output)"
@@ -92,9 +268,176 @@ AppUninstaller/SystemOptimizer.swift:262:34: warning: reference to captured var 
     |                                  `- warning: reference to captured var 'message' in concurrently-executing code; this is an error in the Swift 6 language mode
 263 |         }
 264 |         
+
+AppUninstaller/MalwareScanner.swift:263:32: warning: reference to captured var 'currentStep' in concurrently-executing code; this is an error in the Swift 6 language mode
+261 |             currentStep += 1
+262 |             await MainActor.run {
+263 |                 scanProgress = currentStep / totalSteps
+    |                                `- warning: reference to captured var 'currentStep' in concurrently-executing code; this is an error in the Swift 6 language mode
+264 |                 currentScanPath = signature.name
+265 |             }
+
+AppUninstaller/MalwareScanner.swift:326:28: warning: reference to captured var 'uniqueThreats' in concurrently-executing code; this is an error in the Swift 6 language mode
+324 |         
+325 |         await MainActor.run {
+326 |             self.threats = uniqueThreats
+    |                            `- warning: reference to captured var 'uniqueThreats' in concurrently-executing code; this is an error in the Swift 6 language mode
+327 |             self.isScanning = false
+328 |             self.scanProgress = 1.0
+
+AppUninstaller/MalwareScanner.swift:344:32: warning: mutable capture of 'inout' parameter 'currentStep' is not allowed in concurrently-executing code; this is an error in the Swift 6 language mode
+342 |             currentStep += 1
+343 |             await MainActor.run {
+344 |                 scanProgress = currentStep / totalSteps
+    |                                `- warning: mutable capture of 'inout' parameter 'currentStep' is not allowed in concurrently-executing code; this is an error in the Swift 6 language mode
+345 |                 currentScanPath = dir
+346 |             }
+
+AppUninstaller/SmartCleanerService.swift:892:48: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+ 890 |             
+ 891 |             if let enumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey]) {
+ 892 |                 for case let fileURL as URL in enumerator {
+     |                                                `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+ 893 |                     let ext = fileURL.pathExtension.lowercased()
+ 894 |                     if ["log", "txt", "crash", "diag"].contains(ext) || fileURL.lastPathComponent.contains("log") {
+
+AppUninstaller/SmartCleanerService.swift:921:40: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+ 919 |         }
+ 920 |         
+ 921 |         for case let fileURL as URL in enumerator {
+     |                                        `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+ 922 |             if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+ 923 |                let isDir = values.isDirectory, !isDir,
+
+AppUninstaller/SmartCleanerService.swift:1010:13: warning: initialization of immutable value 'totalFiles' was never used; consider replacing with assignment to '_' or removing it
+1008 |         }
+1009 |         
+1010 |         let totalFiles = allSizeResults.count
+     |             `- warning: initialization of immutable value 'totalFiles' was never used; consider replacing with assignment to '_' or removing it
+1011 |         
+1012 |         // 2. 筛选出同大小的文件组（潜在重复）
+
+AppUninstaller/SmartCleanerService.swift:1100:40: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1098 |         ) else { return results }
+1099 |         
+1100 |         for case let fileURL as URL in enumerator {
+     |                                        `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1101 |             guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey]),
+1102 |                   let isDir = values.isDirectory, !isDir,
+
+AppUninstaller/SmartCleanerService.swift:1127:44: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1125 |         // 收集所有图片
+1126 |         if let enumerator = fileManager.enumerator(at: picturesDir, includingPropertiesForKeys: [.fileSizeKey]) {
+1127 |             for case let fileURL as URL in enumerator {
+     |                                            `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1128 |                 let ext = fileURL.pathExtension.lowercased()
+1129 |                 if ["jpg", "jpeg", "png", "heic", "heif", "tiff"].contains(ext) {
+
+AppUninstaller/SmartCleanerService.swift:1137:44: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1135 |         // 计算图片特征
+1136 |         if let enumerator = fileManager.enumerator(at: picturesDir, includingPropertiesForKeys: [.fileSizeKey]) {
+1137 |             for case let fileURL as URL in enumerator {
+     |                                            `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1138 |                 let ext = fileURL.pathExtension.lowercased()
+1139 |                 guard ["jpg", "jpeg", "png", "heic", "heif", "tiff"].contains(ext) else { continue }
+
+AppUninstaller/SmartCleanerService.swift:1143:43: warning: reference to captured var 'processedCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+1141 |                 processedCount += 1
+1142 |                 await MainActor.run {
+1143 |                     scanProgress = Double(processedCount) / Double(max(totalCount, 1))
+     |                                           `- warning: reference to captured var 'processedCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+1144 |                     currentScanPath = fileURL.lastPathComponent
+1145 |                 }
+
+AppUninstaller/SmartCleanerService.swift:1143:72: warning: reference to captured var 'totalCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+1141 |                 processedCount += 1
+1142 |                 await MainActor.run {
+1143 |                     scanProgress = Double(processedCount) / Double(max(totalCount, 1))
+     |                                                                        `- warning: reference to captured var 'totalCount' in concurrently-executing code; this is an error in the Swift 6 language mode
+1144 |                     currentScanPath = fileURL.lastPathComponent
+1145 |                 }
+
+AppUninstaller/SmartCleanerService.swift:1350:40: warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1348 |         ) else { return items }
+1349 |         
+1350 |         for case let fileURL as URL in enumerator {
+     |                                        `- warning: instance method 'makeIterator' is unavailable from asynchronous contexts; this is an error in the Swift 6 language mode; this is an error in the Swift 6 language mode
+1351 |             // 跳过 Library 等系统目录
+1352 |             if fileURL.path.contains("/Library/") || fileURL.path.contains("/.git/") {
+
+AppUninstaller/SmartCleanerService.swift:1661:25: warning: result of call to 'run(resultType:body:)' is unused
+1659 |         }
+1660 |         
+1661 |         await MainActor.run { cleanedCategories.insert(.systemJunk) }
+     |                         `- warning: result of call to 'run(resultType:body:)' is unused
+1662 |         
+1663 |         // 2. 清理重复文件
+
+AppUninstaller/SmartCleanerService.swift:1677:29: warning: result of call to 'run(resultType:body:)' is unused
+1675 |                 }
+1676 |             }
+1677 |             await MainActor.run { cleanedCategories.insert(.duplicates) }
+     |                             `- warning: result of call to 'run(resultType:body:)' is unused
+1678 |         }
+1679 |         
+
+AppUninstaller/SmartCleanerService.swift:1694:29: warning: result of call to 'run(resultType:body:)' is unused
+1692 |                 }
+1693 |             }
+1694 |             await MainActor.run { cleanedCategories.insert(.similarPhotos) }
+     |                             `- warning: result of call to 'run(resultType:body:)' is unused
+1695 |         }
+1696 |         
+
+AppUninstaller/SmartCleanerService.swift:1713:29: warning: result of call to 'run(resultType:body:)' is unused
+1711 |                 } else { totalFailed += 1 }
+1712 |             }
+1713 |             await MainActor.run { cleanedCategories.insert(.localizations) }
+     |                             `- warning: result of call to 'run(resultType:body:)' is unused
+1714 |         }
+1715 |         
+
+AppUninstaller/SmartCleanerService.swift:1728:29: warning: result of call to 'run(resultType:body:)' is unused
+1726 |                 } else { totalFailed += 1 }
+1727 |             }
+1728 |             await MainActor.run { cleanedCategories.insert(.largeFiles) }
+     |                             `- warning: result of call to 'run(resultType:body:)' is unused
+1729 |         }
+1730 |         
+
+AppUninstaller/SmartCleanerService.swift:1735:33: warning: reference to captured var 'failedFiles' in concurrently-executing code; this is an error in the Swift 6 language mode
+1733 |         await MainActor.run {
+1734 |             // 只移除成功的，保留失败的
+1735 |             let failedSet = Set(failedFiles.map(\.url))
+     |                                 `- warning: reference to captured var 'failedFiles' in concurrently-executing code; this is an error in the Swift 6 language mode
+1736 |             
+1737 |             userCacheFiles = userCacheFiles.filter { failedSet.contains($0.url) }
+
+AppUninstaller/SmartCleanerView.swift:274:25: warning: no 'async' operations occur within 'await' expression
+ 272 |                 Button(action: {
+ 273 |                     Task {
+ 274 |                         await service.resetAll()
+     |                         `- warning: no 'async' operations occur within 'await' expression
+ 275 |                     }
+ 276 |                 }) {
+
+AppUninstaller/SmartCleanerView.swift:296:25: warning: no 'async' operations occur within 'await' expression
+ 294 |                 Button(action: {
+ 295 |                     Task {
+ 296 |                         await service.resetAll()
+     |                         `- warning: no 'async' operations occur within 'await' expression
+ 297 |                         await service.scanAll()
+ 298 |                     }
+
+AppUninstaller/SmartCleanerView.swift:488:25: warning: no 'async' operations occur within 'await' expression
+ 486 |                     // 返回初始状态
+ 487 |                     Task {
+ 488 |                         await service.resetAll()
+     |                         `- warning: no 'async' operations occur within 'await' expression
+ 489 |                         showCleaningFinished = false
+ 490 |                     }
 [0;32m✓ 编译成功[0m
 [1;33m[5/5] 签名应用...[0m
-build/Mac优化大师.app: replacing existing signature
 [0;32m✓ 签名完成[0m
 
 [0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m

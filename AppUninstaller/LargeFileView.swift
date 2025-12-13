@@ -2,7 +2,8 @@ import SwiftUI
 
 struct LargeFileView: View {
     @Binding var selectedModule: AppModule
-    @StateObject private var scanner = LargeFileScanner()
+    // 使用共享的服务管理器，切换视图时扫描状态不会丢失
+    @ObservedObject private var scanner = ScanServiceManager.shared.largeFileScanner
     @ObservedObject private var loc = LocalizationManager.shared
     @State private var selectedFiles: Set<UUID> = []
     @State private var showDeleteConfirmation = false

@@ -28,6 +28,8 @@ echo -e "${YELLOW}[1/5] 检查源文件...${NC}"
 SWIFT_FILES=(
     "${SOURCE_DIR}/Models.swift"
     "${SOURCE_DIR}/LocalizationManager.swift"
+    "${SOURCE_DIR}/ConcurrentScanner.swift"
+    "${SOURCE_DIR}/ScanServiceManager.swift"
     "${SOURCE_DIR}/AppScanner.swift"
     "${SOURCE_DIR}/ResidualFileScanner.swift"
     "${SOURCE_DIR}/FileRemover.swift"
@@ -57,6 +59,7 @@ SWIFT_FILES=(
     "${SOURCE_DIR}/PrivacyScannerService.swift"
     "${SOURCE_DIR}/PrivacyView.swift"
     "${SOURCE_DIR}/SmartCleanerService.swift"
+    "${SOURCE_DIR}/CircularActionButton.swift"
     "${SOURCE_DIR}/SmartCleanerView.swift"
     "${SOURCE_DIR}/AppUninstallerApp.swift"
 )
@@ -100,7 +103,7 @@ echo -e "${YELLOW}[4/5] 编译 Swift 源代码...${NC}"
 swiftc \
     -O \
     -whole-module-optimization \
-    -target arm64-apple-macos13.0 \
+    -target x86_64-apple-macos13.0 \
     -sdk $(xcrun --sdk macosx --show-sdk-path) \
     -parse-as-library \
     -o "${BUILD_DIR}/${BUNDLE_NAME}/Contents/MacOS/${EXECUTABLE_NAME}" \

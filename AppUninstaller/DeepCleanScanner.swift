@@ -146,11 +146,10 @@ class DeepCleanScanner: ObservableObject {
         // 1. 获取已安装应用的 Bundle IDs
         installedBundleIds = await getInstalledBundleIds()
         
-        var allItems: [OrphanedItem] = []
         let homeDir = fileManager.homeDirectoryForCurrentUser
         let libraryURL = homeDir.appendingPathComponent("Library")
         
-        // 2. 扫描各个目录
+        // 2. 定义扫描任务
         let scanTasks: [(URL, OrphanedType)] = [
             (libraryURL.appendingPathComponent("Application Support"), .applicationSupport),
             (libraryURL.appendingPathComponent("Caches"), .caches),
@@ -161,16 +160,36 @@ class DeepCleanScanner: ObservableObject {
             (libraryURL.appendingPathComponent("Logs"), .logs)
         ]
         
-        for (url, type) in scanTasks {
-            await MainActor.run {
-                scanProgress = "正在扫描 \(type.rawValue)..."
+        let totalTasks = scanTasks.count
+        let progressTracker = ScanProgressTracker()
+        await progressTracker.setTotalTasks(totalTasks)
+        
+        // 3. 使用 TaskGroup 并行扫描所有目录
+        var allItems: [OrphanedItem] = []
+        
+        await withTaskGroup(of: (OrphanedType, [OrphanedItem]).self) { group in
+            for (url, type) in scanTasks {
+                group.addTask {
+                    await self.updateScanProgress("正在扫描 \(type.rawValue)...")
+                    let items = await self.scanDirectoryConcurrent(url, type: type)
+                    return (type, items)
+                }
             }
             
-            let items = await scanDirectory(url, type: type)
-            allItems.append(contentsOf: items)
+            // 收集结果并更新进度
+            for await (_, items) in group {
+                allItems.append(contentsOf: items)
+                await progressTracker.completeTask()
+                
+                let progress = await progressTracker.getProgress()
+                await MainActor.run {
+                    // 显示进度（可以用于 UI 进度条）
+                    _ = progress
+                }
+            }
         }
         
-        // 3. 计算总大小
+        // 4. 计算总大小
         var total: Int64 = 0
         for item in allItems {
             total += item.size
@@ -185,6 +204,122 @@ class DeepCleanScanner: ObservableObject {
             isScanning = false
             scanProgress = ""
         }
+    }
+    
+    private func updateScanProgress(_ message: String) async {
+        await MainActor.run {
+            scanProgress = message
+        }
+    }
+    
+    /// 并发扫描目录 - 优化版
+    private func scanDirectoryConcurrent(_ url: URL, type: OrphanedType) async -> [OrphanedItem] {
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey])
+            
+            // 使用 TaskGroup 并发处理每个子项
+            var items: [OrphanedItem] = []
+            
+            await withTaskGroup(of: OrphanedItem?.self) { group in
+                for itemURL in contents {
+                    group.addTask {
+                        let itemName = itemURL.lastPathComponent
+                        
+                        // 跳过系统文件
+                        if self.isSystemItem(itemName) {
+                            return nil
+                        }
+                        
+                        // 跳过已安装应用的文件
+                        if self.isInstalledApp(itemName) {
+                            return nil
+                        }
+                        
+                        // 并发计算大小
+                        let size = await self.calculateSizeAsync(at: itemURL)
+                        
+                        // 只添加有一定大小的项目 (>100KB)
+                        if size > 100 * 1024 {
+                            let bundleId = self.extractBundleId(from: itemName)
+                            return OrphanedItem(
+                                url: itemURL,
+                                name: self.formatDisplayName(itemName),
+                                bundleId: bundleId,
+                                size: size,
+                                type: type
+                            )
+                        }
+                        return nil
+                    }
+                }
+                
+                for await item in group {
+                    if let item = item {
+                        items.append(item)
+                    }
+                }
+            }
+            
+            return items
+        } catch {
+            return []
+        }
+    }
+    
+    /// 异步并发计算目录大小
+    private func calculateSizeAsync(at url: URL) async -> Int64 {
+        var totalSize: Int64 = 0
+        var isDirectory: ObjCBool = false
+        
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return 0 }
+        
+        if isDirectory.boolValue {
+            // 收集所有文件
+            guard let enumerator = fileManager.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.fileSizeKey],
+                options: [.skipsHiddenFiles]
+            ) else { return 0 }
+            
+            var fileURLs: [URL] = []
+            for case let fileURL as URL in enumerator {
+                fileURLs.append(fileURL)
+            }
+            
+            // 分块并发计算
+            let chunkSize = max(50, fileURLs.count / 4)
+            let chunks = stride(from: 0, to: fileURLs.count, by: chunkSize).map {
+                Array(fileURLs[$0..<min($0 + chunkSize, fileURLs.count)])
+            }
+            
+            await withTaskGroup(of: Int64.self) { group in
+                for chunk in chunks {
+                    group.addTask {
+                        var chunkTotal: Int64 = 0
+                        for fileURL in chunk {
+                            if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
+                               let size = values.fileSize {
+                                chunkTotal += Int64(size)
+                            }
+                        }
+                        return chunkTotal
+                    }
+                }
+                
+                for await size in group {
+                    totalSize += size
+                }
+            }
+        } else {
+            if let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+               let size = attributes[.size] as? UInt64 {
+                totalSize = Int64(size)
+            }
+        }
+        
+        return totalSize
     }
     
     private func getInstalledBundleIds() async -> Set<String> {
