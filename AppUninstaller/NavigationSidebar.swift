@@ -122,7 +122,7 @@ struct NavigationSidebar: View {
             // 底部版本信息
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("v2.1.0")
+                    Text("v3.0.0")
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.3))
                     Text("Pro Version")
@@ -173,7 +173,7 @@ struct SidebarMenuItem: View {
         switch module {
         case .monitor: return localization.currentLanguage == .chinese ? "控制台" : "Monitor"
         case .uninstaller: return localization.currentLanguage == .chinese ? "卸载器" : "Uninstaller"
-        case .deepClean: return localization.currentLanguage == .chinese ? "邮件附件" : "Mail Attachments"
+        case .deepClean: return localization.currentLanguage == .chinese ? "深度清理" : "Deep Clean"
         case .cleaner: return localization.currentLanguage == .chinese ? "系统垃圾" : "System Junk"
         case .optimizer: return localization.currentLanguage == .chinese ? "优化" : "Optimization"
         case .largeFiles: return localization.currentLanguage == .chinese ? "大型和旧文件" : "Large & Old Files"
