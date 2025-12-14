@@ -123,14 +123,15 @@ MacOptimizer is a system optimization tool designed specifically for macOS, feat
 ### Install via Homebrew (Recommended)
 
 ```bash
-# Install using Homebrew Cask
-brew tap ddlmanus/macoptimizer
-brew install --cask macoptimizer
+# Install directly from the cask file URL
+brew install --cask https://raw.githubusercontent.com/ddlmanus/MacOptimizer/main/homebrew/macoptimizer.rb
 ```
 
-Or install directly from the local cask file:
+Or clone the repo first and install locally:
 
 ```bash
+git clone https://github.com/ddlmanus/MacOptimizer.git
+cd MacOptimizer
 brew install --cask ./homebrew/macoptimizer.rb
 ```
 
@@ -358,14 +359,15 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具，采用现代�
 ### 通过 Homebrew 安装（推荐）
 
 ```bash
-# 使用 Homebrew Cask 安装
-brew tap ddlmanus/macoptimizer
-brew install --cask macoptimizer
+# 直接从 cask 文件 URL 安装
+brew install --cask https://raw.githubusercontent.com/ddlmanus/MacOptimizer/main/homebrew/macoptimizer.rb
 ```
 
-或者从本地 cask 文件安装：
+或者先克隆仓库再本地安装：
 
 ```bash
+git clone https://github.com/ddlmanus/MacOptimizer.git
+cd MacOptimizer
 brew install --cask ./homebrew/macoptimizer.rb
 ```
 

@@ -2,8 +2,8 @@ cask "macoptimizer" do
   arch arm: "AppleSilicon", intel: "Intel"
 
   version "3.0.1"
-  sha256 arm:   "REPLACE_WITH_ARM64_SHA256",
-         intel: "REPLACE_WITH_INTEL_SHA256"
+  sha256 arm:   "c8ed6b72c0b01066fedabad8d74f08b8bd66d554d93bdbf0602d8059da0471cc",
+         intel: "4c209f8c434108d2abeb18a824c6283b905bff3599a22fc420b77ffdaee480c0"
 
   url "https://github.com/ddlmanus/MacOptimizer/releases/download/v#{version}/MacOptimizer_v#{version}_#{arch}.dmg"
   name "MacOptimizer"
