@@ -389,9 +389,7 @@ open build/Mac优化大师.app
 -target x86_64-apple-macos13.0
 ```
 如果觉得对你有帮助，可以点个 star 哦  开发不易，你的支持就是我最大的动力
-![alt text](232c7a1250566c36cc8955135f160603.jpg)
 
-![alt text](9e5af7a6ad459d9b379345c0c16aba60.jpg)
 ---
 
 问题收集和建议
