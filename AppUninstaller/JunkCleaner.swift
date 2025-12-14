@@ -99,31 +99,27 @@ enum JunkType: String, CaseIterable, Identifiable {
                 "~/Library/Logs"
             ]
         case .browserCache: 
+            // 仅包含安全的缓存路径，已移除包含登录信息的目录
+            // 注意: 已移除 IndexedDB, LocalStorage, Databases, Firefox/Profiles, CacheStorage - 这些包含用户登录信息
             return [
-                // Chrome
+                // Chrome - 安全缓存
                 "~/Library/Caches/Google/Chrome",
                 "~/Library/Application Support/Google/Chrome/Default/Cache",
                 "~/Library/Application Support/Google/Chrome/Default/Code Cache",
                 "~/Library/Application Support/Google/Chrome/Default/GPUCache",
-                "~/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage",
-                "~/Library/Application Support/Google/Chrome/Default/IndexedDB",
                 "~/Library/Application Support/Google/Chrome/ShaderCache",
-                // Safari
+                // Safari - 仅 Caches 安全
                 "~/Library/Caches/com.apple.Safari",
-                "~/Library/Safari/LocalStorage",
-                "~/Library/Safari/Databases",
-                "~/Library/WebKit/com.apple.Safari",
-                // Firefox
+                // Firefox - 仅 Caches 安全 (已移除 Profiles - 包含历史和登录)
                 "~/Library/Caches/Firefox",
-                "~/Library/Application Support/Firefox/Profiles",
-                // Edge
+                // Edge - 安全缓存
                 "~/Library/Caches/Microsoft Edge",
                 "~/Library/Application Support/Microsoft Edge/Default/Cache",
                 "~/Library/Application Support/Microsoft Edge/Default/Code Cache",
-                // Arc
+                // Arc - 安全缓存
                 "~/Library/Caches/company.thebrowser.Browser",
                 "~/Library/Application Support/Arc/User Data/Default/Cache",
-                // Brave
+                // Brave - 安全缓存
                 "~/Library/Caches/BraveSoftware",
                 "~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cache",
                 // Opera
@@ -586,23 +582,73 @@ class JunkCleaner: ObservableObject {
         }
     }
     
-    /// 获取所有已安装应用的 Bundle ID
+    /// 获取所有已安装应用的 Bundle ID（改进版）
     private func getAllInstalledAppBundleIds() -> Set<String> {
         var bundleIds = Set<String>()
-        let appDirs = ["/Applications", "/System/Applications", fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path]
+        
+        // 1. 扫描标准应用目录
+        let appDirs = [
+            "/Applications",
+            "/System/Applications",
+            "/System/Applications/Utilities",
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+        ]
         
         for appDir in appDirs {
             if let apps = try? fileManager.contentsOfDirectory(atPath: appDir) {
                 for app in apps where app.hasSuffix(".app") {
                     let appPath = "\(appDir)/\(app)"
                     let plistPath = "\(appPath)/Contents/Info.plist"
+                    
+                    // 添加应用名称作为备用匹配
+                    let appName = (app as NSString).deletingPathExtension
+                    bundleIds.insert(appName.lowercased())
+                    
                     if let plist = NSDictionary(contentsOfFile: plistPath),
                        let bundleId = plist["CFBundleIdentifier"] as? String {
                         bundleIds.insert(bundleId)
+                        bundleIds.insert(bundleId.lowercased())
+                        
+                        // 提取 Bundle ID 的最后组件
+                        if let lastComponent = bundleId.components(separatedBy: ".").last {
+                            bundleIds.insert(lastComponent.lowercased())
+                        }
                     }
                 }
             }
         }
+        
+        // 2. 添加 Homebrew Cask 应用
+        let homebrewPaths = ["/opt/homebrew/Caskroom", "/usr/local/Caskroom"]
+        for caskPath in homebrewPaths {
+            if let casks = try? fileManager.contentsOfDirectory(atPath: caskPath) {
+                for cask in casks {
+                    bundleIds.insert(cask.lowercased())
+                }
+            }
+        }
+        
+        // 3. 添加正在运行的应用
+        for app in NSWorkspace.shared.runningApplications {
+            if let bundleId = app.bundleIdentifier {
+                bundleIds.insert(bundleId)
+                bundleIds.insert(bundleId.lowercased())
+            }
+            if let name = app.localizedName {
+                bundleIds.insert(name.lowercased())
+            }
+        }
+        
+        // 4. 添加系统安全名单
+        let systemSafelist = [
+            "com.apple", "apple", "google", "chrome", "microsoft", "firefox",
+            "adobe", "dropbox", "slack", "discord", "zoom", "telegram",
+            "wechat", "qq", "tencent", "jetbrains", "xcode", "safari"
+        ]
+        for safe in systemSafelist {
+            bundleIds.insert(safe)
+        }
+        
         return bundleIds
     }
     

@@ -434,18 +434,15 @@ class SmartCleanerService: ObservableObject {
             }
         }
         
-        // 4. 扫描浏览器数据 (Service Workers, IndexedDB 等)
+        // 4. 扫描浏览器数据 (仅安全的缓存目录)
+        // 注意: 已移除 IndexedDB, LocalStorage, Databases - 这些包含用户登录信息
         let browserDataPaths = [
-            // Chrome
+            // Chrome - 仅 Service Worker 和 ShaderCache (安全)
             home.appendingPathComponent("Library/Application Support/Google/Chrome/Default/Service Worker"),
-            home.appendingPathComponent("Library/Application Support/Google/Chrome/Default/IndexedDB"),
             home.appendingPathComponent("Library/Application Support/Google/Chrome/ShaderCache"),
-            // Edge  
-            home.appendingPathComponent("Library/Application Support/Microsoft Edge/Default/Service Worker"),
-            home.appendingPathComponent("Library/Application Support/Microsoft Edge/Default/IndexedDB"),
-            // Safari
-            home.appendingPathComponent("Library/Safari/Databases"),
-            home.appendingPathComponent("Library/Safari/LocalStorage")
+            // Edge - 仅 Service Worker (安全)
+            home.appendingPathComponent("Library/Application Support/Microsoft Edge/Default/Service Worker")
+            // Safari - 已移除 Databases 和 LocalStorage (包含登录信息)
         ]
         
         for browserPath in browserDataPaths {
@@ -602,28 +599,24 @@ class SmartCleanerService: ObservableObject {
                     }
                 }
                 
-                // 扫描整个容器（检测卸载残留）
-                if isOrphan {
-                    let totalSize = calculateSize(at: containerURL)
-                    if totalSize > 100 * 1024 {
-                        items.append(CleanerFileItem(
-                            url: containerURL,
-                            name: "⚠️ \(formatAppName(bundleId)) 完整容器 (已卸载残留)",
-                            size: totalSize,
-                            groupId: "userCache"
-                        ))
-                    }
-                }
+                // ⚠️ 已禁用整体容器删除 - 误判风险过高，可能导致正常应用数据丢失
+                // 只删除容器中的缓存和临时文件子目录
             }
         }
         
         // 3. 扫描 ~/Library/Saved Application State
+        // 排除正在运行的应用，避免删除导致应用崩溃
+        let runningAppIds = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier?.lowercased() })
         let savedStateURL = home.appendingPathComponent("Library/Saved Application State")
         if let contents = try? fileManager.contentsOfDirectory(at: savedStateURL, includingPropertiesForKeys: nil) {
             for itemURL in contents {
+                let bundleId = itemURL.lastPathComponent.replacingOccurrences(of: ".savedState", with: "")
+                
+                // 跳过正在运行的应用，删除其状态文件可能导致崩溃
+                if runningAppIds.contains(bundleId.lowercased()) { continue }
+                
                 let size = calculateSize(at: itemURL)
                 if size > 5 * 1024 { // 更低阈值
-                    let bundleId = itemURL.lastPathComponent.replacingOccurrences(of: ".savedState", with: "")
                     let isOrphan = isOrphanedFile(bundleId: bundleId, installedIds: installedAppBundleIds)
                     items.append(CleanerFileItem(
                         url: itemURL,
@@ -642,8 +635,9 @@ class SmartCleanerService: ObservableObject {
                 let appName = appURL.lastPathComponent
                 let isOrphan = isOrphanedAppSupport(dirName: appName, installedIds: installedAppBundleIds)
                 
-                // 查找各种缓存目录
-                for cacheDirName in ["Cache", "Caches", "cache", "CacheStorage", "GPUCache", "Code Cache", "ShaderCache", "blob_storage", "Session Storage", "Local Storage", "IndexedDB"] {
+                // 查找各种缓存目录 (仅安全的缓存，已移除包含登录信息的目录)
+                // 注意: 已移除 CacheStorage, Session Storage, Local Storage, IndexedDB, blob_storage - 这些可能包含登录信息
+                for cacheDirName in ["Cache", "Caches", "cache", "GPUCache", "Code Cache", "ShaderCache"] {
                     let cacheDir = appURL.appendingPathComponent(cacheDirName)
                     if fileManager.fileExists(atPath: cacheDir.path) {
                         let size = calculateSize(at: cacheDir)
@@ -658,18 +652,9 @@ class SmartCleanerService: ObservableObject {
                     }
                 }
                 
-                // 检测整个已卸载应用的 Application Support 目录
-                if isOrphan {
-                    let totalSize = calculateSize(at: appURL)
-                    if totalSize > 500 * 1024 { // 只报告较大的残留
-                        items.append(CleanerFileItem(
-                            url: appURL,
-                            name: "⚠️ \(appName) Application Support (已卸载残留)",
-                            size: totalSize,
-                            groupId: "userCache"
-                        ))
-                    }
-                }
+                // ⚠️ 已禁用整体 Application Support 目录删除 - 误判风险过高
+                // isOrphanedAppSupport 检测逻辑可能误判，删除正在使用的应用数据会导致应用无法启动
+                // 只删除其中的缓存子目录
             }
         }
         
@@ -694,19 +679,8 @@ class SmartCleanerService: ObservableObject {
             }
         }
         
-        // 6. 扫描 ~/Library/Cookies
-        let cookiesURL = home.appendingPathComponent("Library/Cookies")
-        if fileManager.fileExists(atPath: cookiesURL.path) {
-            let size = calculateSize(at: cookiesURL)
-            if size > 5 * 1024 {
-                items.append(CleanerFileItem(
-                    url: cookiesURL,
-                    name: "Cookies",
-                    size: size,
-                    groupId: "userCache"
-                ))
-            }
-        }
+        // 6. 已移除 ~/Library/Cookies 扫描 - 删除会导致所有网站登录状态丢失
+        // 如需清理 Cookies，请使用隐私清理模块并明确确认
         
         // 7. 扫描 ~/Library/WebKit
         let webkitURL = home.appendingPathComponent("Library/WebKit")
@@ -769,65 +743,229 @@ class SmartCleanerService: ObservableObject {
         return items.sorted { $0.size > $1.size }
     }
     
-    // MARK: - 辅助方法：获取已安装应用的 Bundle ID
-    private func getInstalledAppBundleIds() -> Set<String> {
+    // MARK: - 辅助方法：获取已安装应用信息（改进版）
+    /// 返回 (bundleIds, appNames) 元组，用于更精确的匹配
+    private func getInstalledAppInfo() -> (bundleIds: Set<String>, appNames: Set<String>) {
         var bundleIds = Set<String>()
-        let appDirs = ["/Applications", "/System/Applications", fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path]
+        var appNames = Set<String>()
+        
+        // 1. 扫描标准应用目录
+        let appDirs = [
+            "/Applications",
+            "/System/Applications",
+            "/System/Applications/Utilities",
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+        ]
         
         for appDir in appDirs {
             if let apps = try? fileManager.contentsOfDirectory(atPath: appDir) {
                 for app in apps where app.hasSuffix(".app") {
                     let appPath = "\(appDir)/\(app)"
                     let plistPath = "\(appPath)/Contents/Info.plist"
+                    
+                    // 添加应用名称（去掉 .app 后缀）
+                    let appName = (app as NSString).deletingPathExtension
+                    appNames.insert(appName.lowercased())
+                    
+                    // 读取 Bundle ID
                     if let plist = NSDictionary(contentsOfFile: plistPath),
                        let bundleId = plist["CFBundleIdentifier"] as? String {
                         bundleIds.insert(bundleId)
                         bundleIds.insert(bundleId.lowercased())
+                        
+                        // 提取 Bundle ID 的最后一个组件作为备用匹配
+                        if let lastComponent = bundleId.components(separatedBy: ".").last {
+                            appNames.insert(lastComponent.lowercased())
+                        }
                     }
                 }
             }
         }
         
-        return bundleIds
-    }
-    
-    // MARK: - 辅助方法：检测是否为已卸载应用的残留
-    private func isOrphanedFile(bundleId: String, installedIds: Set<String>) -> Bool {
-        // 跳过系统服务
-        if bundleId.hasPrefix("com.apple.") { return false }
-        // 跳过常见的非应用缓存目录
-        let systemDirs = ["CloudKit", "GeoServices", "FamilyCircle", "knowledge", "metadata", "tmp", "T"]
-        if systemDirs.contains(bundleId) { return false }
+        // 2. 扫描 Homebrew Cask 安装的应用
+        let homebrewPaths = [
+            "/opt/homebrew/Caskroom",
+            "/usr/local/Caskroom"
+        ]
         
-        return !installedIds.contains(bundleId) && !installedIds.contains(bundleId.lowercased())
-    }
-    
-    private func isOrphanedAppSupport(dirName: String, installedIds: Set<String>) -> Bool {
-        // 跳过系统目录
-        let systemDirs = ["Apple", "CrashReporter", "AddressBook", "CallHistoryDB", "com.apple.", "Dock", "iCloud", "Knowledge", "MobileSync"]
-        for sys in systemDirs {
-            if dirName.localizedCaseInsensitiveContains(sys) { return false }
+        for caskPath in homebrewPaths {
+            if let casks = try? fileManager.contentsOfDirectory(atPath: caskPath) {
+                for cask in casks {
+                    appNames.insert(cask.lowercased())
+                }
+            }
         }
         
-        // 特殊处理：Antigravity (本应用相关)
-        if dirName.localizedCaseInsensitiveContains("Antigravity") {
+        // 3. 添加正在运行的应用（最重要的安全检查）
+        let runningApps = NSWorkspace.shared.runningApplications
+        for app in runningApps {
+            if let bundleId = app.bundleIdentifier {
+                bundleIds.insert(bundleId)
+                bundleIds.insert(bundleId.lowercased())
+            }
+            if let name = app.localizedName {
+                appNames.insert(name.lowercased())
+            }
+        }
+        
+        // 4. 添加系统关键服务的白名单
+        let systemSafelist = [
+            // Apple 服务
+            "com.apple", "apple", "icloud", "cloudkit", "safari", "mail", "messages",
+            "photos", "music", "podcasts", "news", "tv", "books", "maps", "notes",
+            "reminders", "calendar", "contacts", "facetime", "preview", "quicktime",
+            // 系统组件
+            "finder", "dock", "spotlight", "siri", "systemuiserver", "loginwindow",
+            "windowserver", "coreaudio", "coremedia", "coreservices",
+            // 常见第三方应用组件
+            "google", "chrome", "microsoft", "edge", "firefox", "mozilla",
+            "adobe", "dropbox", "slack", "discord", "zoom", "telegram", "whatsapp",
+            "wechat", "qq", "tencent", "alibaba", "jetbrains", "vscode", "visual studio"
+        ]
+        
+        for safe in systemSafelist {
+            appNames.insert(safe)
+        }
+        
+        return (bundleIds, appNames)
+    }
+    
+    // 保留旧方法以兼容现有调用
+    private func getInstalledAppBundleIds() -> Set<String> {
+        return getInstalledAppInfo().bundleIds
+    }
+    
+    // MARK: - 辅助方法：检测是否为已卸载应用的残留（改进版）
+    private func isOrphanedFile(bundleId: String, installedIds: Set<String>) -> Bool {
+        let lowerBundleId = bundleId.lowercased()
+        
+        // 1. 跳过所有 Apple 系统服务
+        if lowerBundleId.hasPrefix("com.apple.") { return false }
+        if lowerBundleId.hasPrefix("apple") { return false }
+        
+        // 2. 扩展的系统/非应用目录白名单
+        let systemDirs = [
+            "cloudkit", "geoservices", "familycircle", "knowledge", "metadata",
+            "tmp", "t", "caches", "cache", "logs", "preferences", "temp",
+            "cookies", "webkit", "httpstorages", "containers", "group containers",
+            "databases", "keychains", "accounts", "mail", "calendars", "contacts"
+        ]
+        if systemDirs.contains(lowerBundleId) { return false }
+        
+        // 3. 获取完整的应用信息
+        let appInfo = getInstalledAppInfo()
+        
+        // 4. 检查 Bundle ID 是否匹配已安装应用
+        if appInfo.bundleIds.contains(bundleId) || appInfo.bundleIds.contains(lowerBundleId) {
             return false
         }
         
-        // 检查是否有对应的已安装应用 (忽略大小写)
-        for bundleId in installedIds {
-            // 反向检查：Bundle ID 包含目录名 (例如 com.google.Chrome 包含 Google)
-            if bundleId.localizedCaseInsensitiveContains(dirName) {
+        // 5. 检查应用名称是否匹配（模糊匹配）
+        for appName in appInfo.appNames {
+            if lowerBundleId.contains(appName) || appName.contains(lowerBundleId) {
                 return false
             }
-            // 正向检查：目录名包含 Bundle ID 后缀 (例如 "Google Chrome" 包含 "Chrome")
-            if let lastComponent = bundleId.components(separatedBy: ".").last {
-                if dirName.localizedCaseInsensitiveContains(lastComponent) {
+        }
+        
+        // 6. 检查 Bundle ID 各组件是否匹配应用名称
+        let components = bundleId.components(separatedBy: ".")
+        for component in components where component.count > 3 {
+            if appInfo.appNames.contains(component.lowercased()) {
+                return false
+            }
+        }
+        
+        // 所有检查都通过，才认为是孤立文件
+        return true
+    }
+    
+    private func isOrphanedAppSupport(dirName: String, installedIds: Set<String>) -> Bool {
+        let lowerDirName = dirName.lowercased()
+        
+        // 1. 扩展的系统目录白名单（更全面）
+        let systemSafelist = [
+            // Apple 系统服务
+            "apple", "crashreporter", "addressbook", "callhistorydb", "dock", "icloud",
+            "knowledge", "mobilesync", "systemuiserver", "finder", "spotlight",
+            "assistant", "siri", "icdd", "accounts", "bluetooth", "audio",
+            // 系统框架和服务
+            "coreservices", "coremedia", "coreaudio", "webkit", "cfnetwork",
+            "networkservices", "securityagent", "syncservices", "ubiquity",
+            // 常见应用名称变体
+            "google", "chrome", "microsoft", "firefox", "mozilla", "safari",
+            "adobe", "dropbox", "slack", "discord", "zoom", "telegram", "whatsapp",
+            "wechat", "qq", "tencent", "alibaba", "jetbrains", "visual studio",
+            // 开发工具
+            "xcode", "simulator", "instruments", "compilers", "llvm", "clang",
+            "homebrew", "brew", "npm", "yarn", "node", "python", "ruby", "java",
+            // 媒体和音频
+            "avid", "ableton", "logic", "garageband", "final cut", "motion",
+            // 安全和系统工具
+            "1password", "lastpass", "keychain", "security", "firewall",
+            // 特殊处理
+            "antigravity", "macoptimizer"
+        ]
+        
+        for safe in systemSafelist {
+            if lowerDirName.localizedCaseInsensitiveContains(safe) {
+                return false
+            }
+        }
+        
+        // 2. 获取完整应用信息
+        let appInfo = getInstalledAppInfo()
+        
+        // 3. 检查目录名是否与已安装应用匹配
+        // 检查 Bundle ID
+        for bundleId in appInfo.bundleIds {
+            let lowerBundleId = bundleId.lowercased()
+            
+            // 完整匹配
+            if lowerDirName == lowerBundleId {
+                return false
+            }
+            
+            // Bundle ID 包含目录名（例如 com.google.Chrome 包含 google）
+            if lowerBundleId.contains(lowerDirName) && lowerDirName.count > 3 {
+                return false
+            }
+            
+            // 目录名包含 Bundle ID 组件
+            let components = bundleId.components(separatedBy: ".")
+            for component in components where component.count > 3 {
+                if lowerDirName.contains(component.lowercased()) {
                     return false
                 }
             }
         }
         
+        // 4. 检查应用名称
+        for appName in appInfo.appNames {
+            // 双向模糊匹配
+            if lowerDirName.contains(appName) || appName.contains(lowerDirName) {
+                return false
+            }
+            
+            // 处理空格分隔的应用名（例如 "Visual Studio Code"）
+            let dirWords = lowerDirName.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            let appWords = appName.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            
+            // 如果有多个共同词汇，认为匹配
+            let commonWords = Set(dirWords).intersection(Set(appWords)).filter { $0.count > 2 }
+            if commonWords.count >= 2 {
+                return false
+            }
+        }
+        
+        // 5. 额外安全检查：如果目录看起来是某种框架或插件，不要删除
+        let frameworkPatterns = ["framework", "plugin", "extension", "helper", "service", "daemon", "agent", "bundle"]
+        for pattern in frameworkPatterns {
+            if lowerDirName.contains(pattern) {
+                return false
+            }
+        }
+        
+        // 所有检查都通过，才认为是孤立目录
         return true
     }
     
@@ -844,36 +982,12 @@ class SmartCleanerService: ObservableObject {
     
     // MARK: - 语言文件扫描
     private func scanLanguageFiles() async -> [CleanerFileItem] {
-        var items: [CleanerFileItem] = []
-        let appsDir = URL(fileURLWithPath: "/Applications")
-        
-        guard let apps = try? fileManager.contentsOfDirectory(at: appsDir, includingPropertiesForKeys: nil) else {
-            return items
-        }
-        
-        for app in apps where app.pathExtension == "app" {
-            let resourcesDir = app.appendingPathComponent("Contents/Resources")
-            guard let resources = try? fileManager.contentsOfDirectory(at: resourcesDir, includingPropertiesForKeys: nil) else {
-                continue
-            }
-            
-            for resource in resources {
-                let name = resource.lastPathComponent
-                if name.hasSuffix(".lproj") && !keepLocalizations.contains(name) {
-                    let size = calculateSize(at: resource)
-                    if size > 0 {
-                        items.append(CleanerFileItem(
-                            url: resource,
-                            name: "\(app.deletingPathExtension().lastPathComponent) - \(name)",
-                            size: size,
-                            groupId: "languageFiles"
-                        ))
-                    }
-                }
-            }
-        }
-        
-        return items.sorted { $0.size > $1.size }
+        // ⚠️ 已禁用语言文件扫描
+        // 删除 /Applications/*.app/Contents/Resources/*.lproj 会破坏 App Store 应用的代码签名
+        // 导致 macOS Gatekeeper 阻止应用运行，需要重新从 App Store 下载才能修复
+        // 
+        // 如需清理语言文件，用户应使用专门的工具（如 Monolingual）并了解风险
+        return []
     }
     
     // MARK: - 系统日志扫描

@@ -54,8 +54,14 @@ struct SmartCleanerView: View {
     }
 
     // 计算扫描到的总大小
+    // 注意：只计算顶级类别，避免重复计算
+    // systemJunk 已经包含了 systemCache, oldUpdates, userCache, languageFiles, systemLogs, userLogs, brokenLoginItems
     private var totalScannedSize: Int64 {
-        return CleanerCategory.allCases.reduce(0) { $0 + service.sizeFor(category: $1) }
+        // 只计算顶级类别，不包括 systemJunk 的子类别
+        let topLevelCategories: [CleanerCategory] = [
+            .systemJunk, .duplicates, .similarPhotos, .localizations, .largeFiles
+        ]
+        return topLevelCategories.reduce(0) { $0 + service.sizeFor(category: $1) }
     }
     
     var body: some View {

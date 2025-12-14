@@ -308,13 +308,11 @@ class DeepCleanScanner: ObservableObject {
     private func scanLogs() async -> [DeepCleanItem] {
         var logDirs = [URL]()
         
-        // User Logs
+        // User Logs - 安全
         let userLogs = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs")
         logDirs.append(userLogs)
         
-        // System Logs (Requires permission, might fail for some)
-        logDirs.append(URL(fileURLWithPath: "/Library/Logs"))
-        logDirs.append(URL(fileURLWithPath: "/private/var/log"))
+        // 注意: 已移除系统日志路径 /Library/Logs 和 /private/var/log - 可能影响系统稳定性
         
         let config = ScanConfiguration(
             minFileSize: 0,
@@ -340,12 +338,11 @@ class DeepCleanScanner: ObservableObject {
     private func scanCaches() async -> [DeepCleanItem] {
         var cacheDirs = [URL]()
         
-        // User Caches
+        // User Caches - 安全
         let userCaches = fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches")
         cacheDirs.append(userCaches)
         
-        // System Caches
-        cacheDirs.append(URL(fileURLWithPath: "/Library/Caches"))
+        // 注意: 已移除 /Library/Caches - 系统缓存应由系统自行管理
         
         // 这里我们只扫描顶级文件夹或大文件，避免列出数百万个小缓存文件
         // 策略：列出 Caches 下的一级子文件夹，计算其大小，作为一个 Item
@@ -433,13 +430,15 @@ class DeepCleanScanner: ObservableObject {
     
     // MARK: - App Helpers
     
-    /// 获取已安装应用的标识符集合 (Bundle ID + Name)
+    /// 获取已安装应用的标识符集合 (Bundle ID + Name) - 改进版
     private func getInstalledAppParams() async -> Set<String> {
         var params = Set<String>()
         
+        // 1. 扫描标准应用目录
         let appDirs = [
             "/Applications",
             "/System/Applications",
+            "/System/Applications/Utilities",
             fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
         ]
         
@@ -460,13 +459,44 @@ class DeepCleanScanner: ObservableObject {
                        let plist = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any],
                        let bundleId = plist["CFBundleIdentifier"] as? String {
                         params.insert(bundleId.lowercased())
+                        
+                        // 提取 Bundle ID 各组件
+                        for component in bundleId.components(separatedBy: ".") where component.count > 3 {
+                            params.insert(component.lowercased())
+                        }
                     }
                 }
             }
         }
         
-        // 添加常用系统标识符防止误删
-        let systemSafelist = ["com.apple", "cloudkit", "safari", "mail", "messages", "photos"]
+        // 2. 添加 Homebrew Cask 应用
+        let homebrewPaths = ["/opt/homebrew/Caskroom", "/usr/local/Caskroom"]
+        for caskPath in homebrewPaths {
+            if let casks = try? fileManager.contentsOfDirectory(atPath: caskPath) {
+                for cask in casks {
+                    params.insert(cask.lowercased())
+                }
+            }
+        }
+        
+        // 3. 添加正在运行的应用（最重要的安全检查）
+        for app in NSWorkspace.shared.runningApplications {
+            if let bundleId = app.bundleIdentifier {
+                params.insert(bundleId.lowercased())
+            }
+            if let name = app.localizedName {
+                params.insert(name.lowercased())
+            }
+        }
+        
+        // 4. 扩展的系统安全名单
+        let systemSafelist = [
+            "com.apple", "cloudkit", "safari", "mail", "messages", "photos",
+            "finder", "dock", "spotlight", "siri", "xcode", "instruments",
+            "google", "chrome", "microsoft", "firefox", "adobe", "dropbox",
+            "slack", "discord", "zoom", "telegram", "wechat", "qq", "tencent",
+            "jetbrains", "vscode", "homebrew", "npm", "python", "ruby", "java"
+        ]
         for safe in systemSafelist {
             params.insert(safe)
         }
@@ -480,15 +510,23 @@ class DeepCleanScanner: ObservableObject {
         // 1. 直接匹配
         if params.contains(lowerName) { return true }
         
-        // 2. 也是常用模式：com.company.app
+        // 2. 检查是否为系统保留
+        if lowerName.starts(with: "com.apple.") { return true }
+        if lowerName.starts(with: "apple") { return true }
+        
+        // 3. 模糊匹配：检查是否包含已安装应用名称
         for param in params {
-            if lowerName.contains(param) || (param.count > 5 && lowerName.hasPrefix(param)) {
+            // 双向包含检查
+            if lowerName.contains(param) || param.contains(lowerName) {
                 return true
             }
         }
         
-        // 3. 检查是否是系统保留
-        if lowerName.starts(with: "com.apple.") { return true }
+        // 4. 框架和插件保护
+        let safePatterns = ["framework", "plugin", "extension", "helper", "service", "daemon", "agent"]
+        for pattern in safePatterns {
+            if lowerName.contains(pattern) { return true }
+        }
         
         return false
     }
