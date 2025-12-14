@@ -19,6 +19,7 @@ class LargeFileScanner: ObservableObject {
     @Published var isScanning = false
     @Published var scannedCount = 0
     @Published var totalSize: Int64 = 0
+    @Published var hasCompletedScan = false
     
     private let minimumSize: Int64 = 50 * 1024 * 1024 // 50MB
     
@@ -41,6 +42,7 @@ class LargeFileScanner: ObservableObject {
         isScanning = false
         scannedCount = 0
         totalSize = 0
+        hasCompletedScan = false
         isCleaning = false
         cleanedCount = 0
         cleanedSize = 0
@@ -55,6 +57,7 @@ class LargeFileScanner: ObservableObject {
             self.foundFiles = []
             self.scannedCount = 0
             self.totalSize = 0
+            self.hasCompletedScan = false
             self.isStopped = false
             self.shouldStop = false
         }
@@ -132,6 +135,7 @@ class LargeFileScanner: ObservableObject {
             self.totalSize = finalTotal
             self.scannedCount = totalScannedCount
             self.isScanning = false
+            self.hasCompletedScan = true
         }
     }
     

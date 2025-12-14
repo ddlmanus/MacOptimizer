@@ -5,6 +5,7 @@ enum TrashScanState {
     case initial    // 初始页面
     case scanning   // 扫描中
     case completed  // 扫描完成（结果页）
+    case clean      // 扫描完成且无文件
     case cleaning   // 清理中
     case finished   // 清理完成
 }
@@ -34,6 +35,7 @@ class TrashScanner: ObservableObject {
     @Published var items: [TrashItem] = []
     @Published var isScanning = false
     @Published var totalSize: Int64 = 0
+    @Published var hasCompletedScan = false
     @Published var needsPermission = false
     
     // 新增属性
@@ -77,6 +79,7 @@ class TrashScanner: ObservableObject {
             items = []
             totalSize = 0
             scannedItemCount = 0
+            hasCompletedScan = false
             needsPermission = false
         }
         
@@ -148,6 +151,7 @@ class TrashScanner: ObservableObject {
             self.totalSize = finalTotal
             self.isScanning = false
             self.scannedItemCount = sortedItems.count
+            self.hasCompletedScan = true
         }
     }
     
@@ -339,6 +343,7 @@ class TrashScanner: ObservableObject {
         totalSize = 0
         needsPermission = false
         scannedItemCount = 0
+        hasCompletedScan = false
         isStopped = false
         currentScanPath = ""
         isCleaning = false
@@ -387,6 +392,8 @@ struct TrashView: View {
         } else if !scanner.items.isEmpty || scanner.isStopped {
             // 如果已经被停止，也显示结果页（可能是部分结果）
             return .completed
+        } else if scanner.hasCompletedScan && scanner.items.isEmpty {
+            return .clean
         }
         return .initial
     }
@@ -401,6 +408,8 @@ struct TrashView: View {
                     scanningPage
                 case .completed:
                     resultsPage
+                case .clean:
+                    cleanPage
                 case .cleaning:
                     cleaningPage
                 case .finished:
@@ -496,6 +505,103 @@ struct TrashView: View {
         }
     }
     
+    // MARK: - 1.5. Clean Page
+    private var cleanPage: some View {
+        VStack(spacing: 0) {
+            // Top Nav
+            HStack {
+                Button(action: {
+                    scanner.reset()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text(loc.currentLanguage == .chinese ? "重新开始" : "Start Over")
+                    }
+                    .foregroundColor(.secondaryText)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text(loc.L("trash"))
+                    .font(.title2)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                // Placeholder
+                Text("Start Over")
+                    .opacity(0)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            
+            Spacer()
+            
+            // Central Icon (Green Trash Badge)
+            ZStack {
+                Circle()
+                    .fill(GradientStyles.trash.opacity(0.8))
+                    .frame(width: 250, height: 250)
+                    .shadow(color: Color(red: 0.0, green: 0.8, blue: 0.7).opacity(0.3), radius: 20, x: 0, y: 10)
+                
+                VStack(spacing: 0) {
+                     Image(systemName: "trash")
+                        .font(.system(size: 80))
+                        .foregroundColor(.white)
+                     
+                     // Checkmark badge
+                     /*
+                     Image(systemName: "checkmark")
+                          .font(.system(size: 40))
+                          .foregroundColor(.white)
+                          .padding(8)
+                          .background(Circle().fill(Color.green))
+                          .offset(x: 40, y: -40) // Adjust position to be like a badge if needed, or just separate
+                     */
+                }
+            }
+            .overlay(
+                 Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.white) // Or green
+                    .background(Circle().fill(Color.green)) // Ensure background is green
+                     .foregroundColor(.white)
+                    .offset(x: 60, y: 80)
+            )
+            .padding(.bottom, 30)
+
+            // Text
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.title)
+                
+                Text(loc.currentLanguage == .chinese ? "非常干净！" : "Very Clean!")
+                    .font(.title)
+                    .bold()
+                    .foregroundColor(.white)
+            }
+            .padding(.bottom, 8)
+            
+            Text(loc.currentLanguage == .chinese ? "任何废纸篓中都没有文件。" : "No files found in any Trash bin.")
+                .font(.body)
+                .foregroundColor(.secondaryText)
+            
+            Spacer()
+            
+            // Back/Rescan Button
+             CircularActionButton(
+                 title: loc.currentLanguage == .chinese ? "返回" : "Back",
+                 gradient: CircularActionButton.blueGradient,
+                 action: {
+                     scanner.reset()
+                 }
+             )
+             .padding(.bottom, 60)
+        }
+    }
+
     // MARK: - 2. 扫描中页面
     private var scanningPage: some View {
         VStack(spacing: 0) {

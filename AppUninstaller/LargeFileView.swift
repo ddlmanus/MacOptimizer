@@ -20,6 +20,8 @@ struct LargeFileView: View {
                 finishedPage
             } else if !scanner.foundFiles.isEmpty {
                 resultsPage
+            } else if scanner.hasCompletedScan {
+                cleanPage
             } else {
                 initialPage
                     .onAppear {
@@ -226,6 +228,90 @@ struct LargeFileView: View {
         }
     }
     
+    // MARK: - 2.5 Clean Page (No files found)
+    var cleanPage: some View {
+        VStack(spacing: 30) {
+            // Header
+            HStack {
+                Button(action: {
+                    scanner.reset()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text(loc.currentLanguage == .chinese ? "重新开始" : "Start Over")
+                    }
+                    .foregroundColor(.secondaryText)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text(loc.currentLanguage == .chinese ? "大型和旧文件" : "Large and Old Files")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                // Placeholder for symmetry
+                Text("Start Over")
+                    .opacity(0)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 20)
+            
+            Spacer()
+            
+            // Central Icon (Whale substitute)
+            ZStack {
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(
+                        LinearGradient(colors: [Color.orange.opacity(0.8), Color.pink.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .frame(width: 250, height: 200)
+                    .overlay(
+                        VStack(spacing: 10) {
+                             Image(systemName: "folder.fill")
+                                 .font(.system(size: 80))
+                                 .foregroundColor(.white.opacity(0.9))
+                             Image(systemName: "checkmark")
+                                  .font(.system(size: 40))
+                                  .foregroundColor(.white)
+                                  .padding(8)
+                                  .background(Circle().fill(Color.green))
+                                  .offset(x: 40, y: 20)
+                        }
+                    )
+                    .shadow(radius: 20)
+            }
+            
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text(loc.currentLanguage == .chinese ? "非常干净！" : "Very Clean!")
+                        .font(.title)
+                        .fontWeight(.bold)
+                }
+                
+                Text(loc.currentLanguage == .chinese ? "没有发现大型或旧文件。" : "No large or old files found.")
+                    .font(.body)
+                    .foregroundColor(.secondaryText)
+            }
+            
+            Spacer()
+            
+            // Back or Rescan button
+            CircularActionButton(
+                title: loc.currentLanguage == .chinese ? "返回" : "Back",
+                gradient: GradientStyles.largeFiles,
+                action: {
+                    scanner.reset()
+                }
+            )
+            .padding(.bottom, 40)
+        }
+    }
+
     // MARK: - 3. Results Page (Image 2 UI is DetailsSplitView, so this is just the transition or wrapper)
     // The design shows the SplitView IS the results page effectively.
     // So we should just show LargeFileDetailsSplitView directly here or embed it.

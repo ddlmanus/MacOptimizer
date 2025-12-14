@@ -120,6 +120,26 @@ MacOptimizer is a system optimization tool designed specifically for macOS, feat
 - **Apple Silicon (M1/M2/M3)** or Intel (modify build parameters)
 - **Command Line Tools** (Full Xcode not required)
 
+### Install via Homebrew (Recommended)
+
+```bash
+# Install using Homebrew Cask
+brew tap ddlmanus/macoptimizer
+brew install --cask macoptimizer
+```
+
+Or install directly from the local cask file:
+
+```bash
+brew install --cask ./homebrew/macoptimizer.rb
+```
+
+### Download DMG
+
+Download the latest release from [GitHub Releases](https://github.com/ddlmanus/MacOptimizer/releases):
+- **Apple Silicon (M1/M2/M3)**: `MacOptimizer_vX.X.X_AppleSilicon.dmg`
+- **Intel**: `MacOptimizer_vX.X.X_Intel.dmg`
+
 ### Build from Source
 
 ```bash
@@ -335,6 +355,26 @@ Mac优化大师是一款专为 macOS 设计的系统优化工具，采用现代�
 - **Apple Silicon (M1/M2/M3)** 或 Intel 芯片（需修改编译参数）
 - **Command Line Tools**（无需安装完整 Xcode）
 
+### 通过 Homebrew 安装（推荐）
+
+```bash
+# 使用 Homebrew Cask 安装
+brew tap ddlmanus/macoptimizer
+brew install --cask macoptimizer
+```
+
+或者从本地 cask 文件安装：
+
+```bash
+brew install --cask ./homebrew/macoptimizer.rb
+```
+
+### 下载 DMG
+
+从 [GitHub Releases](https://github.com/ddlmanus/MacOptimizer/releases) 下载最新版本：
+- **Apple Silicon (M1/M2/M3)**: `MacOptimizer_vX.X.X_AppleSilicon.dmg`
+- **Intel**: `MacOptimizer_vX.X.X_Intel.dmg`
+
 ### 从源码编译
 
 ```bash
@@ -365,6 +405,9 @@ open build/Mac优化大师.app
 
 ![alt text](9e5af7a6ad459d9b379345c0c16aba60.jpg)
 ---
+
+问题收集和建议
+https://docs.qq.com/sheet/DY0xIdGZxckVvQUFk?no_promotion=1&is_blank_or_template=blank&tab=s3z6cr
 
 ## ⚠️ 免责声明
 
