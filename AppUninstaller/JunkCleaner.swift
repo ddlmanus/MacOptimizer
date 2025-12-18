@@ -279,7 +279,7 @@ enum JunkType: String, CaseIterable, Identifiable {
         case .oldUpdates:
             return [] // DISABLED - System path
         case .brokenPreferences:
-            return ["~/Library/Preferences"]
+            return [] // DISABLED - Safety precaution for user settings
         case .documentVersions:
             return [] // DISABLED - System path
         }
@@ -329,9 +329,9 @@ class JunkCleaner: ObservableObject {
             scanProgress = 0
         }
         
-        // Exclude risky types: universalBinaries (modifies apps), documentVersions (SIP protected)
+        // Exclude risky types: universalBinaries (modifies apps), documentVersions (SIP protected), brokenPreferences (User settings safety)
         let safeTypes = JunkType.allCases.filter { type in
-            type != .universalBinaries && type != .documentVersions
+            type != .universalBinaries && type != .documentVersions && type != .brokenPreferences
         }
         let totalTypes = safeTypes.count
         let progressTracker = ScanProgressTracker()

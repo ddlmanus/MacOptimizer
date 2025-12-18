@@ -12,6 +12,7 @@ struct MonitorView: View {
     @StateObject private var portService = PortScannerService()
     @ObservedObject private var loc = LocalizationManager.shared
     @State private var selectedTab: MonitorTab = .apps
+    @State private var searchText = ""
     
     var body: some View {
         VStack(spacing: 0) {
@@ -106,6 +107,27 @@ struct MonitorView: View {
                                 .foregroundColor(.secondaryText)
                         }
                         
+                        // Search Bar
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondaryText)
+                            TextField(loc.currentLanguage == .chinese ? "搜索..." : "Search...", text: $searchText)
+                                .textFieldStyle(.plain)
+                                .foregroundColor(.white)
+                            
+                            if !searchText.isEmpty {
+                                Button(action: { searchText = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.secondaryText)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(8)
+                        .padding(.horizontal, 1)
+                        
                         // Content based on selected tab
                         switch selectedTab {
                         case .apps, .background:
@@ -140,6 +162,7 @@ struct MonitorView: View {
     }
     
     private func refreshCurrentTab() {
+        // Clear search on refresh? Maybe not, user might want to refresh search results.
         Task {
             switch selectedTab {
             case .apps:
@@ -181,7 +204,11 @@ struct MonitorView: View {
                 .padding(.vertical, 8)
                 .background(Color.white.opacity(0.05))
                 
-                ForEach(processService.processes) { item in
+                .background(Color.white.opacity(0.05))
+                
+                ForEach(processService.processes.filter { 
+                    searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) 
+                }) { item in
                     HStack {
                         if let icon = item.icon {
                             Image(nsImage: icon)
@@ -223,6 +250,21 @@ struct MonitorView: View {
                     }
                     .padding(12)
                     .background(Color.white.opacity(0.02))
+                    .contextMenu {
+                         Button(action: {
+                             processService.terminateProcess(item)
+                         }) {
+                             Text(loc.currentLanguage == .chinese ? "结束进程" : "Quit")
+                             Image(systemName: "xmark.circle")
+                         }
+                         
+                         Button(action: {
+                             processService.forceTerminateProcess(item)
+                         }) {
+                             Text(loc.currentLanguage == .chinese ? "强制退出" : "Force Quit")
+                             Image(systemName: "exclamationmark.octagon")
+                         }
+                     }
                 }
                 
                 if processService.processes.isEmpty {
@@ -286,7 +328,9 @@ struct MonitorView: View {
                 .background(Color.white.opacity(0.05))
                 
                 // Port Rows
-                ForEach(portService.ports) { port in
+                ForEach(portService.ports.filter {
+                    searchText.isEmpty || $0.displayName.localizedCaseInsensitiveContains(searchText) || String($0.pid).contains(searchText) || $0.portString.contains(searchText)
+                }) { port in
                     HStack {
                         // Process Name with Icon
                         HStack(spacing: 6) {

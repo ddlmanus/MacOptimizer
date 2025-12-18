@@ -177,4 +177,18 @@ class ProcessService: ObservableObject {
             self.processes.removeAll { $0.id == item.id }
         }
     }
+
+    
+    func forceTerminateProcess(_ item: ProcessItem) {
+        // Always use "kill -9" for force quit
+        let task = Process()
+        task.launchPath = "/bin/kill"
+        task.arguments = ["-9", String(item.pid)]
+        try? task.run()
+        
+        // Optimistic UI Removal
+        DispatchQueue.main.async {
+            self.processes.removeAll { $0.id == item.id }
+        }
+    }
 }
