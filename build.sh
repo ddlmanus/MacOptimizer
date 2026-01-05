@@ -26,15 +26,19 @@ SOURCE_DIR="AppUninstaller"
 DMG_NAME="${APP_NAME}.dmg"
 
 # 2. 检查源文件
+# 2. 检查源文件
 echo -e "${YELLOW}[1/7] 检查源文件...${NC}"
-SWIFT_FILES=("${SOURCE_DIR}"/*.swift)
-for file in "${SWIFT_FILES[@]}"; do
-    if [ ! -f "$file" ]; then
-        echo -e "${RED}错误: 找不到源文件 $file${NC}"
-        exit 1
-    fi
-done
-echo -e "${GREEN}✓ 源文件检查通过${NC}"
+# Use find to recursively get all .swift files
+SWIFT_FILES=()
+while IFS= read -r -d '' file; do
+    SWIFT_FILES+=("$file")
+done < <(find "${SOURCE_DIR}" -name "*.swift" -print0)
+
+if [ ${#SWIFT_FILES[@]} -eq 0 ]; then
+    echo -e "${RED}错误: 找不到源文件${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ 源文件检查通过 (找到 ${#SWIFT_FILES[@]} 个文件)${NC}"
 
 # 3. 准备构建目录
 echo -e "${YELLOW}[2/7] 准备构建目录...${NC}"
@@ -48,9 +52,20 @@ echo -e "${YELLOW}[3/7] 复制资源文件...${NC}"
 cp "${SOURCE_DIR}/Info.plist" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/"
 if [ -f "${SOURCE_DIR}/AppIcon.icns" ]; then
     cp "${SOURCE_DIR}/AppIcon.icns" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources/"
-    echo -e "${GREEN}✓ Info.plist 和图标已复制${NC}"
+    echo -e "${GREEN}✓ AppIcon.icns 已复制${NC}"
+elif [ -f "${SOURCE_DIR}/Application.icns" ]; then
+    # Use Application.icns as the main AppIcon if AppIcon.icns is missing
+    cp "${SOURCE_DIR}/Application.icns" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources/AppIcon.icns"
+    echo -e "${GREEN}✓ Application.icns 已复制为 AppIcon.icns${NC}"
 else
-    echo -e "${YELLOW}⚠ 警告: 未找到图标文件${NC}"
+    echo -e "${YELLOW}⚠ 警告: 未找到图标文件 (AppIcon.icns 或 Application.icns)${NC}"
+fi
+
+# Also ensure Application.icns is available for the status bar item
+if [ -f "${SOURCE_DIR}/Application.icns" ]; then
+    # Avoid overwriting if it was just copied above? No, cp -n or just copy again is fine/safer.
+    cp "${SOURCE_DIR}/Application.icns" "${BUILD_DIR}/${BUNDLE_NAME}/Contents/Resources/Application.icns"
+    echo -e "${GREEN}✓ Application.icns 已复制 (用于菜单栏)${NC}"
 fi
 
 # 5. 编译 (Apple Silicon)

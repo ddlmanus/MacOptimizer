@@ -14,39 +14,45 @@ enum JunkType: String, CaseIterable, Identifiable {
     case mailAttachments = "邮件附件"
     case crashReports = "崩溃报告"
     case tempFiles = "临时文件"
-    case xcodeDerivedData = "Xcode 衍生数据"
+    case xcodeDerivedData = "Xcode 垃圾"
     // 新增类型
     case universalBinaries = "通用二进制文件"
     case unusedDiskImages = "不使用的磁盘镜像"
+    case brokenLoginItems = "损坏的登录项"
+    case languageFiles = "语言文件"
     case deletedUsers = "已删除用户"
     case iosBackups = "iOS 设备备份"
     case oldUpdates = "旧更新"
     case brokenPreferences = "损坏的偏好设置"
     case documentVersions = "文稿版本"
+    case downloads = "下载"
     
     var id: String { rawValue }
     
     var icon: String {
         switch self {
-        case .userCache: return "archivebox.fill"
-        case .systemCache: return "internaldrive.fill"
-        case .userLogs: return "doc.text.fill"
-        case .systemLogs: return "doc.text.fill"
-        case .browserCache: return "globe.americas.fill"
+        case .userCache: return "person.crop.circle.fill" // User Cache
+        case .systemCache: return "gear.circle.fill" // System Cache
+        case .userLogs: return "doc.text.fill" // User Logs
+        case .systemLogs: return "doc.text.fill" // System Logs
         case .appCache: return "square.stack.3d.up.fill"
-        case .chatCache: return "bubble.left.and.bubble.right.fill"
+        case .browserCache: return "globe.americas.fill"
+        case .chatCache: return "message.fill"
         case .mailAttachments: return "envelope.fill"
         case .crashReports: return "exclamationmark.triangle.fill"
         case .tempFiles: return "clock.fill"
         case .xcodeDerivedData: return "hammer.fill"
-        // 新增图标
-        case .universalBinaries: return "cpu"
-        case .unusedDiskImages: return "externaldrive.fill"
-        case .deletedUsers: return "person.crop.circle.badge.xmark"
-        case .iosBackups: return "iphone"
-        case .oldUpdates: return "arrow.down.circle.fill"
-        case .brokenPreferences: return "gear.badge.xmark"
-        case .documentVersions: return "doc.text.badge.plus"
+        // New Types Icons
+        case .unusedDiskImages: return "externaldrive.fill" // Disk Image
+        case .universalBinaries: return "cpu.fill" // Universal Binary
+        case .brokenLoginItems: return "person.badge.minus" // Broken Login
+        case .deletedUsers: return "person.crop.circle.badge.xmark" // Deleted Users
+        case .iosBackups: return "iphone.circle.fill" // iOS Backups
+        case .oldUpdates: return "arrow.down.circle.fill" // Old Updates
+        case .brokenPreferences: return "gear.badge.xmark" // Broken Prefs
+        case .documentVersions: return "doc.badge.clock.fill"
+        case .languageFiles: return "globe"
+        case .downloads: return "arrow.down.circle.fill"
         }
     }
     
@@ -66,11 +72,14 @@ enum JunkType: String, CaseIterable, Identifiable {
         // 新增描述
         case .universalBinaries: return "支持多种系统架构的应用程序冗余代码"
         case .unusedDiskImages: return "下载后未使用的 DMG/ISO 镜像文件"
+        case .brokenLoginItems: return "指向不存在的应用或文件的登录项"
+        case .languageFiles: return "不使用的应用程序语言包"
         case .deletedUsers: return "已删除用户的残留数据"
         case .iosBackups: return "iOS 设备备份文件"
         case .oldUpdates: return "已安装的软件更新包"
         case .brokenPreferences: return "已卸载应用的偏好设置残留"
         case .documentVersions: return "旧版本的文档历史记录"
+        case .downloads: return "下载文件夹中的文件"
         }
     }
     
@@ -79,15 +88,12 @@ enum JunkType: String, CaseIterable, Identifiable {
         switch self {
         case .userCache: 
             return [
-                "~/Library/Caches",
                 "~/Library/Saved Application State",
                 "~/Library/Cookies"
             ]
         case .systemCache:
-            // Removed all system paths - only user-accessible caches
-            return [
-                "~/Library/Caches"
-            ]
+            // Removed system paths and ~/Library/Caches (handled by appCache)
+            return []
         case .userLogs: 
             return [
                 "~/Library/Logs",
@@ -128,57 +134,7 @@ enum JunkType: String, CaseIterable, Identifiable {
                 "~/Library/Caches/com.vivaldi.Vivaldi"
             ]
         case .appCache:
-            return [
-                // 音乐/媒体应用
-                "~/Library/Caches/com.spotify.client",
-                "~/Library/Application Support/Spotify/PersistentCache",
-                "~/Library/Caches/com.apple.Music",
-                "~/Library/Caches/com.apple.podcasts",
-                "~/Library/Caches/com.apple.TV",
-                "~/Library/Caches/com.netease.163music",
-                "~/Library/Caches/com.kugou.mac.kugou",
-                "~/Library/Caches/com.tencent.QQMusicMac",
-                // 苹果系统应用
-                "~/Library/Caches/com.apple.appstore",
-                "~/Library/Caches/com.apple.news",
-                "~/Library/Caches/com.apple.Maps",
-                "~/Library/Caches/com.apple.Photos",
-                "~/Library/Caches/com.apple.iChat",
-                "~/Library/Caches/com.apple.FaceTime",
-                "~/Library/Caches/com.apple.finder",
-                "~/Library/Caches/com.apple.Preview",
-                "~/Library/Caches/com.apple.QuickTimePlayerX",
-                // 云存储
-                "~/Library/Caches/com.apple.CloudDocs",
-                "~/Library/Caches/com.getdropbox.dropbox",
-                "~/Library/Caches/com.google.GoogleDrive",
-                "~/Library/Application Support/Google/DriveFS",
-                "~/Library/Caches/com.microsoft.OneDrive",
-                // 办公应用
-                "~/Library/Caches/com.microsoft.Word",
-                "~/Library/Caches/com.microsoft.Excel",
-                "~/Library/Caches/com.microsoft.Powerpoint",
-                "~/Library/Caches/com.microsoft.Outlook",
-                "~/Library/Caches/com.microsoft.teams",
-                // 视频会议
-                "~/Library/Caches/us.zoom.xos",
-                "~/Library/Application Support/zoom.us/AutoUpdater",
-                "~/Library/Caches/com.cisco.webexmeetingsapp",
-                "~/Library/Caches/com.tencent.meeting",
-                // 设计/创意应用
-                "~/Library/Caches/com.adobe.Photoshop",
-                "~/Library/Caches/com.adobe.illustrator",
-                "~/Library/Caches/com.figma.Desktop",
-                "~/Library/Caches/com.bohemiancoding.sketch3",
-                // 视频应用
-                "~/Library/Caches/com.bilibili.app.mac",
-                "~/Library/Caches/com.youku.mac",
-                "~/Library/Caches/tv.iqiyi.player",
-                // 其他常用应用
-                "~/Library/Caches/com.electron.react-native-macos-starter",
-                "~/Library/Caches/com.linear",
-                "~/Library/Caches/notion.id"
-            ]
+            return [] // Dynamic scanning implemented in scanTypeConcurrent
         case .chatCache:
             return [
                 // 微信
@@ -269,19 +225,25 @@ enum JunkType: String, CaseIterable, Identifiable {
             ]
         // DISABLED TYPES - These are risky or require system access
         case .universalBinaries:
-            return [] // DISABLED - Do not scan app binaries
+            return ["/Applications", "/System/Applications", "/System/Applications/Utilities", "~/Applications"]
         case .unusedDiskImages:
-            return ["~/Downloads", "~/Desktop", "~/Documents"]
+            return ["~"] // Scan full user home directory recursively
+        case .brokenLoginItems:
+            return ["~/Library/LaunchAgents"]
+        case .languageFiles:
+            return [] // Custom logic
         case .deletedUsers:
-            return [] // DISABLED - System path
+            return ["/Users/Deleted Users"]
         case .iosBackups:
             return ["~/Library/Application Support/MobileSync/Backup"]
         case .oldUpdates:
-            return [] // DISABLED - System path
+            return ["/Library/Updates"]
         case .brokenPreferences:
-            return [] // DISABLED - Safety precaution for user settings
+            return ["~/Library/Preferences"]
         case .documentVersions:
-            return [] // DISABLED - System path
+            return ["/.DocumentRevisions-V100"] 
+        case .downloads:
+            return ["~/Downloads"]
         }
     }
 }
@@ -291,17 +253,21 @@ class JunkItem: Identifiable, ObservableObject, @unchecked Sendable {
     let id = UUID()
     let type: JunkType
     let path: URL
+    let contextPath: URL? // Path for the actual operation (e.g., binary to strip), while `path` is for display (App Bundle)
+    let customName: String? // Optional custom display name
     let size: Int64
     @Published var isSelected: Bool = true
     
-    init(type: JunkType, path: URL, size: Int64) {
+    init(type: JunkType, path: URL, size: Int64, contextPath: URL? = nil, customName: String? = nil) {
         self.type = type
         self.path = path
         self.size = size
+        self.contextPath = contextPath
+        self.customName = customName
     }
     
     var name: String {
-        path.lastPathComponent
+        customName ?? path.lastPathComponent
     }
 }
 
@@ -311,6 +277,8 @@ class JunkCleaner: ObservableObject {
     @Published var isScanning: Bool = false
     @Published var scanProgress: Double = 0
     @Published var hasPermissionErrors: Bool = false
+    @Published var currentScanningPath: String = "" // Add path tracking
+    @Published var currentScanningCategory: String = "" // Add category tracking
     
     private let fileManager = FileManager.default
     
@@ -328,12 +296,14 @@ class JunkCleaner: ObservableObject {
             isScanning = true
             junkItems.removeAll()
             scanProgress = 0
+            hasPermissionErrors = false // Reset errors
         }
         
-        // Exclude risky types: universalBinaries (modifies apps), documentVersions (SIP protected), brokenPreferences (User settings safety)
-        let safeTypes = JunkType.allCases.filter { type in
-            type != .universalBinaries && type != .documentVersions && type != .brokenPreferences
-        }
+        let startTime = Date()
+        
+        // Remove exclusions to matching design requirement. Use safe scanning where possible.
+        // Note: documentVersions and oldUpdates might require admin permissions (handled by sudo fallback or error reporting)
+        let safeTypes = JunkType.allCases
         let totalTypes = safeTypes.count
         let progressTracker = ScanProgressTracker()
         await progressTracker.setTotalTasks(totalTypes)
@@ -371,6 +341,12 @@ class JunkCleaner: ObservableObject {
         // 默认全选
         allItems.forEach { $0.isSelected = true }
         
+        // Ensure minimum 2 seconds scanning time for better UX
+        let elapsed = Date().timeIntervalSince(startTime)
+        if elapsed < 2.0 {
+            try? await Task.sleep(nanoseconds: UInt64((2.0 - elapsed) * 1_000_000_000))
+        }
+
         await MainActor.run { [allItems] in
             self.junkItems = allItems
             isScanning = false
@@ -394,6 +370,11 @@ class JunkCleaner: ObservableObject {
                     let expandedPath = NSString(string: pathStr).expandingTildeInPath
                     let url = URL(fileURLWithPath: expandedPath)
                     
+                    await MainActor.run { 
+                        self.currentScanningPath = expandedPath
+                        self.currentScanningCategory = type.rawValue 
+                    }
+                    
                     guard self.fileManager.fileExists(atPath: url.path) else { return ([], false) }
                     
                     var items: [JunkItem] = []
@@ -404,13 +385,23 @@ class JunkCleaner: ObservableObject {
                          // 扫描应用目录
                         if let contents = try? self.fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
                              for appURL in contents where appURL.pathExtension == "app" {
+                                 await MainActor.run { 
+                                     self.currentScanningPath = appURL.path 
+                                     self.currentScanningCategory = type.rawValue
+                                 } 
                                  let binaryPath = appURL.appendingPathComponent("Contents/MacOS/\(appURL.deletingPathExtension().lastPathComponent)")
                                  if self.fileManager.fileExists(atPath: binaryPath.path) {
                                      // 使用 lipo -detailed_info 获取精确大小
                                      if let savings = self.calculateUniversalBinarySavings(at: binaryPath) {
                                          // 只有节省空间 > 0 才列出
                                          if savings > 0 {
-                                             items.append(JunkItem(type: type, path: binaryPath, size: savings))
+                                             // Key Change: path = appURL (for UI), contextPath = binaryPath (for cleaning)
+                                             // New Naming: [AppName] Extra File (e.g., "WeChat Extra 文件")
+                                             let appName = appURL.deletingPathExtension().lastPathComponent
+                                             let extraText = LocalizationManager.shared.currentLanguage == .chinese ? "Extra 文件" : "Extra File"
+                                             let displayName = "\(appName) \(extraText)"
+                                             
+                                             items.append(JunkItem(type: type, path: appURL, size: savings, contextPath: binaryPath, customName: displayName)) 
                                          }
                                      }
                                  }
@@ -423,6 +414,12 @@ class JunkCleaner: ObservableObject {
                         // 递归扫描目录寻找 .dmg / .iso
                         if let enumerator = self.fileManager.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .contentAccessDateKey], options: [.skipsHiddenFiles]) {
                             while let fileURL = enumerator.nextObject() as? URL {
+                                if Int.random(in: 0...50) == 0 { 
+                                    await MainActor.run { 
+                                        self.currentScanningPath = fileURL.path 
+                                        self.currentScanningCategory = type.rawValue
+                                    } 
+                                } // Throttle updates
                                 let ext = fileURL.pathExtension.lowercased()
                                 if ["dmg", "iso", "pkg"].contains(ext) {
                                     if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 {
@@ -439,6 +436,7 @@ class JunkCleaner: ObservableObject {
                         
                         let runningAppIds = NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier }
                         
+                        // Scan ~/Library/Preferences
                         if let contents = try? self.fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
                             for fileURL in contents where fileURL.pathExtension == "plist" {
                                 let filename = fileURL.deletingPathExtension().lastPathComponent
@@ -460,6 +458,184 @@ class JunkCleaner: ObservableObject {
                                 }
                             }
                         }
+                        return (items, false)
+                    }
+
+                    if type == .brokenLoginItems {
+                        // Scan ~/Library/LaunchAgents
+                        if let contents = try? self.fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                            for fileURL in contents where fileURL.pathExtension == "plist" {
+                                // Parse plist to find the executable path
+                                if let dict = NSDictionary(contentsOf: fileURL),
+                                   let programArguments = dict["ProgramArguments"] as? [String],
+                                   let executablePath = programArguments.first {
+                                    
+                                    // Check if executable exists
+                                    if !self.fileManager.fileExists(atPath: executablePath) {
+                                        // It's broken!
+                                        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                                             items.append(JunkItem(type: type, path: fileURL, size: Int64(size)))
+                                        }
+                                    }
+                                } else if let dict = NSDictionary(contentsOf: fileURL),
+                                          let program = dict["Program"] as? String {
+                                     // Check Program key
+                                     if !self.fileManager.fileExists(atPath: program) {
+                                         if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                                             items.append(JunkItem(type: type, path: fileURL, size: Int64(size)))
+                                         }
+                                     }
+                                }
+                            }
+                        }
+                        return (items, false)
+                    }
+                    
+                    if type == .downloads {
+                        // Just list top-level files in Downloads for user review, or maybe old ones?
+                        // Design implies "Downloads" is just a category. Let's list all files in Downloads.
+                        // Ideally we should categorize them or filter by age, but for now scan them all.
+                        if let contents = try? self.fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
+                             for fileURL in contents {
+                                 if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 {
+                                     items.append(JunkItem(type: type, path: fileURL, size: Int64(size)))
+                                 }
+                             }
+                        }
+                        return (items, false)
+                    }
+
+                    if type == .languageFiles {
+                         // Adapting logic from SmartCleanerService
+                         // 1. Get preferred languages
+                         var keepLanguages: Set<String> = ["Base", "en", "English"]
+                         for lang in Locale.preferredLanguages {
+                             let parts = lang.split(separator: "-").map(String.init)
+                             if let languageCode = parts.first {
+                                 keepLanguages.insert(languageCode)
+                                 if parts.count > 1 {
+                                     let secondPart = parts[1]
+                                     if secondPart.count == 4 { // Script code like Hans
+                                         keepLanguages.insert("\(languageCode)-\(secondPart)")
+                                         keepLanguages.insert("\(languageCode)_\(secondPart)")
+                                     }
+                                 }
+                             }
+                             keepLanguages.insert(lang)
+                         }
+                         
+                         // 2. Scan Applications
+                         let appDirs = [
+                             "/Applications",
+                             self.fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+                         ]
+                         
+                         for appDir in appDirs {
+                             guard let apps = try? self.fileManager.contentsOfDirectory(atPath: appDir) else { continue }
+                             
+                             for appName in apps where appName.hasSuffix(".app") {
+                                 let appPath = (appDir as NSString).appendingPathComponent(appName)
+                                 let appURL = URL(fileURLWithPath: appPath)
+                                 
+                                 // Skip system apps
+                                 let plistPath = appURL.appendingPathComponent("Contents/Info.plist")
+                                 if let plist = NSDictionary(contentsOfFile: plistPath.path),
+                                    let bundleId = plist["CFBundleIdentifier"] as? String {
+                                     if bundleId.hasPrefix("com.apple.") { continue }
+                                 }
+                                 
+                                 // Skip App Store apps
+                                 let receiptPath = appURL.appendingPathComponent("Contents/_MASReceipt")
+                                 if self.fileManager.fileExists(atPath: receiptPath.path) { continue }
+                                 
+                                 let resourcesURL = appURL.appendingPathComponent("Contents/Resources")
+                                 guard let resources = try? self.fileManager.contentsOfDirectory(at: resourcesURL, includingPropertiesForKeys: nil) else { continue }
+                                 
+                                 for itemURL in resources where itemURL.pathExtension == "lproj" {
+                                     let langName = itemURL.deletingPathExtension().lastPathComponent
+                                     
+                                     let shouldKeep = keepLanguages.contains { keep in
+                                         if keep.lowercased() == langName.lowercased() { return true }
+                                         if langName.lowercased().hasPrefix(keep.lowercased()) { return true }
+                                         return false
+                                     }
+                                     
+                                     if !shouldKeep {
+                                         // Don't use calculateSizeAsync here as it calls withTaskGroup which is tricky inside another concurrent block? 
+                                         // check calculateSizeAsync implementation. It uses TaskGroup.
+                                         // Nesting TaskGroups is fine.
+                                         let size = await self.calculateSizeAsync(at: itemURL)
+                                         if size > 0 {
+                                             items.append(JunkItem(type: type, path: itemURL, size: size))
+                                         }
+                                     }
+                                 }
+                             }
+                         }
+                         return (items, false)
+                    }
+                    
+                    if type == .appCache {
+                        let installedAppIds = self.getAllInstalledAppBundleIds()
+                        let userHome = self.fileManager.homeDirectoryForCurrentUser
+                        let cachesURL = userHome.appendingPathComponent("Library/Caches")
+                        
+                        // 1. Scan ~/Library/Caches
+                        if let contents = try? self.fileManager.contentsOfDirectory(at: cachesURL, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
+                            for fileURL in contents {
+                                let filename = fileURL.lastPathComponent
+                                // Match against installed Bundle IDs or common patterns
+                                // Optimization: Check if it LOOKS like a bundle ID (contains dots) AND matches valid chars
+                                // If it matches an installed ID, definitely yes.
+                                // If it starts with com., and we want to be aggressive?
+                                
+                                let isMatch = installedAppIds.contains { appId in
+                                    filename == appId || filename.lowercased() == appId.lowercased()
+                                }
+                                
+                                // Heuristic: If it has "com." or "org." and is a directory, it's likely an app cache.
+                                // But filtering by installed apps is safer as per user request "get all installed apps".
+                                // However, user might have uninstalled apps residuals? That's "Broken Preferences" or similar.
+                                // Let's stick to "Installed Apps" to be precise + safe.
+                                
+                                if isMatch {
+                                    await MainActor.run { 
+                                        self.currentScanningPath = fileURL.path 
+                                        self.currentScanningCategory = type.rawValue
+                                    }
+                                    let size = await self.calculateSizeAsync(at: fileURL)
+                                    if size > 0 {
+                                        items.append(JunkItem(type: type, path: fileURL, size: size))
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 2. Scan Containers for Sandboxed Apps
+                        let containersURL = userHome.appendingPathComponent("Library/Containers")
+                        if let contents = try? self.fileManager.contentsOfDirectory(at: containersURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                            for containerURL in contents {
+                                let containerName = containerURL.lastPathComponent
+                                // Check if this container belongs to an installed app
+                                if installedAppIds.contains(where: { $0.lowercased() == containerName.lowercased() }) {
+                                    // Valid container. Look for Cache.
+                                    let cacheURL = containerURL.appendingPathComponent("Data/Library/Caches")
+                                    if self.fileManager.fileExists(atPath: cacheURL.path) {
+                                         // Check contents of this cache folder? Or the folder itself?
+                                         // Usually the folder itself is the "App Cache".
+                                         await MainActor.run { 
+                                             self.currentScanningPath = cacheURL.path 
+                                             self.currentScanningCategory = type.rawValue
+                                         }
+                                         let size = await self.calculateSizeAsync(at: cacheURL)
+                                         if size > 0 {
+                                             items.append(JunkItem(type: type, path: cacheURL, size: size))
+                                         }
+                                    }
+                                }
+                            }
+                        }
+                        
                         return (items, false)
                     }
                     

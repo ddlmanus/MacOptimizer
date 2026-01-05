@@ -218,20 +218,10 @@ struct SmartCleanerView: View {
                 // 显示器主图标
                 ZStack {
                     // 主体
-                    Image(systemName: "desktopcomputer")
+                    Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 260, height: 260)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.6, blue: 0.8), // 粉色顶部
-                                    Color(red: 0.9, green: 0.4, blue: 0.7)  // 深粉色
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
                         .shadow(color: Color.pink.opacity(0.3), radius: 30, x: 0, y: 10)
                     
                     // 扫过光效 (Wipe/Scan animation effect)

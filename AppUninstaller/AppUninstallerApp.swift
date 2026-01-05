@@ -2,6 +2,9 @@ import SwiftUI
 
 @main
 struct AppUninstallerApp: App {
+    // Hold a strong reference to the manager
+    @StateObject var menuBarManager = MenuBarManager()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -13,5 +16,7 @@ struct AppUninstallerApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1100, height: 750)
+        
+        // MenuBarExtra removed. Manager logic runs on init.
     }
 }

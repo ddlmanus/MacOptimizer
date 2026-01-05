@@ -538,10 +538,12 @@ class PrivacyScannerService: ObservableObject {
             await resetTCCPermissions(selectedPermissions)
         }
         
+        
+        let finalDeleted = successfullyDeleted // Create immutable copy for thread safety
         await MainActor.run {
             // Remove successfully deleted file items from list
             privacyItems.removeAll { item in
-                successfullyDeleted.contains(item.path)
+                finalDeleted.contains(item.path)
             }
             // Also remove permission items that were selected (we attempted to reset them)
             privacyItems.removeAll { item in

@@ -162,6 +162,9 @@ struct GradientStyles {
         case .smartClean: return smartClean
         }
     }
+
+    // Design-specific gradients
+    static let purple = LinearGradient(colors: [Color(hex: "B657FF"), Color(hex: "8A2BE2")], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
 // MARK: - 背景渐变样式 (全屏)
