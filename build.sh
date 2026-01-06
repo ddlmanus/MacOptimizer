@@ -129,20 +129,98 @@ echo -e "${YELLOW}[5/7] 签名应用...${NC}"
 codesign --force --deep --sign - "${BUILD_DIR}/${BUNDLE_NAME}"
 echo -e "${GREEN}✓ 签名完成${NC}"
 
-# 7. 打包 DMG
-echo -e "${YELLOW}[6/7] 打包 DMG 显示镜像...${NC}"
+# 7. 打包 DMG (带有背景图片和 Applications 快捷方式)
+echo -e "${YELLOW}[6/7] 打包 DMG 安装镜像...${NC}"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
 if [ -f "${DMG_PATH}" ]; then
     rm "${DMG_PATH}"
 fi
 
+# 创建临时目录用于 DMG 内容
+DMG_TEMP_DIR="${BUILD_DIR}/dmg_temp"
+rm -rf "${DMG_TEMP_DIR}"
+mkdir -p "${DMG_TEMP_DIR}"
+
+# 复制应用到临时目录
+cp -R "${BUILD_DIR}/${BUNDLE_NAME}" "${DMG_TEMP_DIR}/"
+
+# 创建 Applications 文件夹的符号链接
+ln -s /Applications "${DMG_TEMP_DIR}/Applications"
+
+# 创建隐藏的背景图片目录
+mkdir -p "${DMG_TEMP_DIR}/.background"
+if [ -f "dmg_background.png" ]; then
+    cp "dmg_background.png" "${DMG_TEMP_DIR}/.background/background.png"
+    echo -e "${GREEN}✓ 背景图片已复制${NC}"
+fi
+
+# 创建临时的读写 DMG
+TEMP_DMG="${BUILD_DIR}/temp_rw.dmg"
+if [ -f "${TEMP_DMG}" ]; then
+    rm "${TEMP_DMG}"
+fi
+
 hdiutil create \
     -volname "${APP_NAME}" \
-    -srcfolder "${BUILD_DIR}/${BUNDLE_NAME}" \
-    -ov -format UDZO \
-    "${DMG_PATH}" > /dev/null
+    -srcfolder "${DMG_TEMP_DIR}" \
+    -ov -format UDRW \
+    "${TEMP_DMG}" > /dev/null
 
-echo -e "${GREEN}✓ DMG 打包完成${NC}"
+# 挂载 DMG 并设置窗口布局
+MOUNT_DIR="/Volumes/${APP_NAME}"
+
+# 先卸载可能已存在的同名卷
+if [ -d "${MOUNT_DIR}" ]; then
+    hdiutil detach "${MOUNT_DIR}" -force > /dev/null 2>&1 || true
+fi
+
+# 挂载 DMG
+hdiutil attach "${TEMP_DMG}" -nobrowse -mountpoint "${MOUNT_DIR}" > /dev/null
+
+# 使用 AppleScript 设置 Finder 窗口布局
+echo -e "  - 设置窗口布局..."
+osascript << EOF
+tell application "Finder"
+    tell disk "${APP_NAME}"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        -- 窗口大小: 660x400
+        set bounds of container window to {200, 150, 860, 550}
+        set theViewOptions to the icon view options of container window
+        set arrangement of theViewOptions to not arranged
+        set icon size of theViewOptions to 100
+        set background picture of theViewOptions to file ".background:background.png"
+        
+        -- 设置图标位置 (垂直居中在窗口中央)
+        -- 窗口高度400，图标100，所以垂直位置约 (400-100-30)/2 = 135 (考虑标题栏和文字)
+        set position of item "${BUNDLE_NAME}" of container window to {140, 180}
+        set position of item "Applications" of container window to {500, 180}
+        
+        close
+        open
+        update without registering applications
+        delay 1
+        close
+    end tell
+end tell
+EOF
+
+# 确保写入完成
+sync
+
+# 卸载 DMG
+hdiutil detach "${MOUNT_DIR}" > /dev/null
+
+# 转换为只读压缩格式
+hdiutil convert "${TEMP_DMG}" -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}" > /dev/null
+
+# 清理临时文件
+rm -f "${TEMP_DMG}"
+rm -rf "${DMG_TEMP_DIR}"
+
+echo -e "${GREEN}✓ DMG 打包完成 (带拖拽安装界面)${NC}"
 
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -151,4 +229,5 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo -e "应用包: ${YELLOW}${BUILD_DIR}/${BUNDLE_NAME}${NC}"
 echo -e "DMG文件: ${YELLOW}${DMG_PATH}${NC}"
+echo -e "  └─ ${GREEN}✓ 包含拖拽安装界面和 Applications 快捷方式${NC}"
 echo ""
