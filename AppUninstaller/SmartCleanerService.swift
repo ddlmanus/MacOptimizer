@@ -462,11 +462,11 @@ class SmartCleanerService: ObservableObject {
         await MainActor.run { userCacheFiles = usrCache }
         currentStep += 1
         
-        // 4. 扫描语言文件
-        await updateProgress(step: currentStep, total: totalSteps, message: "正在扫描语言文件...")
-        let langFiles = await scanLanguageFiles()
-        await MainActor.run { languageFiles = langFiles }
-        currentStep += 1
+        // 4. 扫描语言文件 - ⚠️ 已禁用(用户要求只清理缓存和日志)
+        // await updateProgress(step: currentStep, total: totalSteps, message: "正在扫描语言文件...")
+        // let langFiles = await scanLanguageFiles()
+        // await MainActor.run { languageFiles = langFiles }
+        // currentStep += 1
         
         // 5. 扫描系统日志
         await updateProgress(step: currentStep, total: totalSteps, message: "正在扫描系统日志...")
@@ -480,10 +480,10 @@ class SmartCleanerService: ObservableObject {
         await MainActor.run { userLogFiles = usrLogs }
         currentStep += 1
         
-        // 7. 扫描损坏的登录项
-        await updateProgress(step: currentStep, total: totalSteps, message: "正在扫描损坏的登录项...")
-        let brokenItems = await scanBrokenLoginItems()
-        await MainActor.run { brokenLoginItems = brokenItems }
+        // 7. 扫描损坏的登录项 - ⚠️ 已禁用(用户要求只清理缓存和日志)
+        // await updateProgress(step: currentStep, total: totalSteps, message: "正在扫描损坏的登录项...")
+        // let brokenItems = await scanBrokenLoginItems()
+        // await MainActor.run { brokenLoginItems = brokenItems }
         
         await MainActor.run {
             currentScanPath = ""
@@ -2119,11 +2119,13 @@ class SmartCleanerService: ObservableObject {
         case .localizations:
             for file in localizationFiles where file.isSelected {
                 do {
-                    try fileManager.removeItem(at: file.url)
+                    // ⚠️ 安全修复: 使用trashItem代替removeItem
+                    try fileManager.trashItem(at: file.url, resultingItemURL: nil)
                     freedSize += file.size
                     success += 1
                 } catch {
                     failed += 1
+                    print("[SmartCleaner] ⚠️ Failed to delete localization: \(error)")
                 }
             }
             await scanLocalizations()
@@ -2267,7 +2269,7 @@ class SmartCleanerService: ObservableObject {
             isScanning = true
         }
         
-        // --- 1. 系统垃圾 ---
+        // --- 1. 系统垃圾 (仅缓存和日志) ---
         await MainActor.run { currentCategory = .systemJunk; currentScanPath = "Scanning for system junk..." }
         await scanSystemJunk()
         await MainActor.run { _ = scannedCategories.insert(.systemJunk); scanProgress = 0.125 }
@@ -2331,6 +2333,7 @@ class SmartCleanerService: ObservableObject {
             scanProgress = 1.0
         }
         if shouldStopScanning { return }
+
         
         // 扫描结束
         await MainActor.run {
@@ -2362,43 +2365,47 @@ class SmartCleanerService: ObservableObject {
         var totalSize: Int64 = 0
         var failedFiles: [CleanerFileItem] = []
         
-        // 辅助函数：安全删除文件
+        // 辅助函数:安全删除文件
         func safeDelete(file: CleanerFileItem) -> Bool {
             let url = file.url
             let path = url.path
             
-            // 特殊处理：如果是废纸篓中的文件，直接删除，不能再移入废纸篓
+            // ⚠️ 安全修复: 使用SafetyGuard检查
+            if !SafetyGuard.shared.isSafeToDelete(url) {
+                print("[SmartCleaner] 🛡️ SafetyGuard blocked deletion: \(path)")
+                failedFiles.append(file)
+                return false
+            }
+            
+            // 特殊处理:如果是废纸篓中的文件,可以直接删除
             if path.contains("/.Trash/") || path.hasSuffix("/.Trash") {
                 do {
                     try fileManager.removeItem(at: url)
+                    print("[SmartCleaner] ✅ Deleted trash file: \(file.name)")
                     return true
                 } catch {
-                     // 失败则加入失败列表
+                    print("[SmartCleaner] ⚠️ Failed to delete trash file: \(error)")
                     failedFiles.append(file)
                     return false
                 }
             }
             
             // 1. 检查文件是否可写/可删除
-            // 如果不可删除，加入失败列表，稍后尝试提权删除
             if !fileManager.isDeletableFile(atPath: path) {
                 failedFiles.append(file)
                 return false
             }
             
-            // 2. 尝试移动到废纸篓 (更安全)
+            // 2. 优先移动到废纸篓 (更安全,可恢复)
             do {
                 try fileManager.trashItem(at: url, resultingItemURL: nil)
+                print("[SmartCleaner] ✅ Moved to trash: \(file.name)")
                 return true
             } catch {
-                // 3. 尝试直接删除
-                do {
-                    try fileManager.removeItem(at: url)
-                    return true
-                } catch {
-                    failedFiles.append(file)
-                    return false
-                }
+                print("[SmartCleaner] ⚠️ Failed to trash: \(error.localizedDescription)")
+                // 移至废纸篓失败,记录但不再尝试直接删除(太危险)
+                failedFiles.append(file)
+                return false
             }
         }
         

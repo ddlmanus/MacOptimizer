@@ -23,7 +23,7 @@ enum JunkType: String, CaseIterable, Identifiable {
     case deletedUsers = "已删除用户"
     case iosBackups = "iOS 设备备份"
     case oldUpdates = "旧更新"
-    case brokenPreferences = "损坏的偏好设置"
+    // ⚠️ brokenPreferences 已移除 - 不再扫描系统偏好设置
     case documentVersions = "文稿版本"
     case downloads = "下载"
     
@@ -48,9 +48,9 @@ enum JunkType: String, CaseIterable, Identifiable {
         case .brokenLoginItems: return "person.badge.minus" // Broken Login
         case .deletedUsers: return "person.crop.circle.badge.xmark" // Deleted Users
         case .iosBackups: return "iphone.circle.fill" // iOS Backups
-        case .oldUpdates: return "arrow.down.circle.fill" // Old Updates
-        case .brokenPreferences: return "gear.badge.xmark" // Broken Prefs
-        case .documentVersions: return "doc.badge.clock.fill"
+        case .oldUpdates: return "arrow.down.doc.fill" // Updates
+        // brokenPreferences 已移除
+        case .documentVersions: return "doc.on.doc.fill"
         case .languageFiles: return "globe"
         case .downloads: return "arrow.down.circle.fill"
         }
@@ -77,7 +77,7 @@ enum JunkType: String, CaseIterable, Identifiable {
         case .deletedUsers: return "已删除用户的残留数据"
         case .iosBackups: return "iOS 设备备份文件"
         case .oldUpdates: return "已安装的软件更新包"
-        case .brokenPreferences: return "已卸载应用的偏好设置残留"
+        // brokenPreferences 已移除 - 不再扫描系统偏好设置
         case .documentVersions: return "旧版本的文档历史记录"
         case .downloads: return "下载文件夹中的文件"
         }
@@ -231,8 +231,7 @@ enum JunkType: String, CaseIterable, Identifiable {
             return ["~/Library/Application Support/MobileSync/Backup"]
         case .oldUpdates:
             return ["/Library/Updates"]
-        case .brokenPreferences:
-            return ["~/Library/Preferences"]
+        // brokenPreferences 已移除 - 不再扫描系统偏好设置
         case .documentVersions:
             return ["/.DocumentRevisions-V100"] 
         case .downloads:
@@ -377,9 +376,8 @@ class JunkCleaner: ObservableObject {
     private func scanTypeConcurrent(_ type: JunkType) async -> ([JunkItem], Bool) {
         let searchPaths = type.searchPaths
         var hasError = false
-        
-        // 预先获取已安装应用列表，仅在需要时获取 (Broken Preferences / Localizations 等可能需要)
-        let installedBundleIds: Set<String>? = (type == .brokenPreferences) ? self.getAllInstalledAppBundleIds() : nil
+        // 预先获取已安装应用列表，仅在需要时获取 (Localizations 等可能需要)
+        // brokenPreferences 已移除，不再需要 installedBundleIds
         
         // 使用 TaskGroup 并行扫描多个路径
         var allItems: [JunkItem] = []
@@ -451,35 +449,7 @@ class JunkCleaner: ObservableObject {
                         return (items, false)
                     }
                     
-                    if type == .brokenPreferences {
-                        guard let installedIds = installedBundleIds else { return ([], false) }
-                        
-                        let runningAppIds = NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier }
-                        
-                        // Scan ~/Library/Preferences
-                        if let contents = try? self.fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
-                            for fileURL in contents where fileURL.pathExtension == "plist" {
-                                let filename = fileURL.deletingPathExtension().lastPathComponent
-                                if filename.starts(with: "com.apple.") || filename.starts(with: ".") { continue }
-                                let isRunning = runningAppIds.contains { runningId in
-                                    filename == runningId || filename.lowercased() == runningId.lowercased()
-                                }
-                                if isRunning { continue }
-                                let isInstalled = installedIds.contains { bundleId in
-                                    return filename == bundleId || 
-                                           filename.lowercased() == bundleId.lowercased() ||
-                                           (filename.count > bundleId.count && filename.hasPrefix(bundleId))
-                                }
-                                
-                                if !isInstalled {
-                                    if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 {
-                                        items.append(JunkItem(type: type, path: fileURL, size: Int64(size)))
-                                    }
-                                }
-                            }
-                        }
-                        return (items, false)
-                    }
+                    // brokenPreferences 已移除 - 不再扫描任何偏好设置
 
                     if type == .brokenLoginItems {
                         // Scan ~/Library/LaunchAgents
@@ -985,19 +955,22 @@ class JunkCleaner: ObservableObject {
     
     /// 删除单个项目
     private func deleteItem(_ item: JunkItem) async -> Bool {
-        // 先尝试移至废纸篓（更安全）
+        // ⚠️ 安全修复: 使用SafetyGuard检查
+        if !SafetyGuard.shared.isSafeToDelete(item.path) {
+            print("[JunkCleaner] 🛡️ SafetyGuard blocked deletion: \(item.path.path)")
+            return false
+        }
+        
+        // 先尝试移至废纸篓(更安全,可恢复)
         do {
             try fileManager.trashItem(at: item.path, resultingItemURL: nil)
+            print("[JunkCleaner] ✅ Moved to trash: \(item.path.lastPathComponent)")
             return true
         } catch {
-            // 废纸篓失败，尝试直接删除
-            do {
-                try fileManager.removeItem(at: item.path)
-                return true
-            } catch {
-                print("Failed to delete \(item.path.path): \(error)")
-                return false
-            }
+            print("[JunkCleaner] ⚠️ Failed to trash, error: \(error)")
+            // 废纸篓失败,记录但不尝试直接删除(太危险)
+            // 应该提示用户使用sudo权限或手动处理
+            return false
         }
     }
     

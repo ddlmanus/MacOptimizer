@@ -456,7 +456,15 @@ class PrivacyScannerService: ObservableObject {
             do {
                 if fileManager.fileExists(atPath: path.path) {
                     print("🧹 [Clean] Deleting: \(path.path)")
-                    try fileManager.removeItem(at: path)
+                    // ⚠️ 安全修复: 优先使用trashItem
+                    do {
+                        try fileManager.trashItem(at: path, resultingItemURL: nil)
+                        print("✅ [Clean] Moved to trash: \(path.lastPathComponent)")
+                    } catch {
+                        // 废纸篓失败才尝试直接删除(隐私数据需要彻底清除)
+                        try fileManager.removeItem(at: path)
+                        print("✅ [Clean] Force deleted: \(path.lastPathComponent)")
+                    }
                     
                     // Verify deletion
                     if !fileManager.fileExists(atPath: path.path) {
@@ -475,7 +483,7 @@ class PrivacyScannerService: ObservableObject {
                     ]
                     for relPath in relatedPaths {
                         if fileManager.fileExists(atPath: relPath) {
-                            try? fileManager.removeItem(atPath: relPath)
+                            try? fileManager.trashItem(at: URL(fileURLWithPath: relPath), resultingItemURL: nil)
                         }
                     }
                 } else {

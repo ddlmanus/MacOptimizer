@@ -40,18 +40,32 @@ class ResidualFileScanner {
         
         // 2. Specialized Logic for Xcode
         if let bid = bundleId, bid == "com.apple.dt.Xcode" {
-            // ~Library/Developer/Xcode
-            let xcodeDataPath = developerPath.appendingPathComponent("Xcode")
-            if fileManager.fileExists(atPath: xcodeDataPath.path) {
-                let size = calculateSize(at: xcodeDataPath)
-                files.append(ResidualFile(path: xcodeDataPath, type: .developer, size: size))
-            }
+            // List of specific Xcode related paths in user directory
+            let xcodePaths = [
+                developerPath.appendingPathComponent("Xcode"),
+                developerPath.appendingPathComponent("CoreSimulator"),
+                developerPath.appendingPathComponent("XCPGDevices"),
+                homeDirectory.appendingPathComponent("Library/MobileDevice"),
+                homeDirectory.appendingPathComponent("Library/Caches/com.apple.dt.Xcode"),
+                homeDirectory.appendingPathComponent("Library/Application Support/Xcode"),
+                homeDirectory.appendingPathComponent("Library/Preferences/com.apple.dt.Xcode.plist"),
+                homeDirectory.appendingPathComponent("Library/Saved Application State/com.apple.dt.Xcode.savedState"),
+                homeDirectory.appendingPathComponent("Library/Application Support/com.apple.dt.Xcode") // Check for bundle ID folder too
+            ]
             
-            // ~Library/Developer/CoreSimulator
-            let simulatorPath = developerPath.appendingPathComponent("CoreSimulator")
-            if fileManager.fileExists(atPath: simulatorPath.path) {
-                 let size = calculateSize(at: simulatorPath)
-                 files.append(ResidualFile(path: simulatorPath, type: .developer, size: size))
+            for path in xcodePaths {
+                if fileManager.fileExists(atPath: path.path) {
+                    let size = calculateSize(at: path)
+                    // Determine type based on path
+                    let type: FileType
+                    if path.path.contains("/Caches/") { type = .caches }
+                    else if path.path.contains("/Preferences/") { type = .preferences }
+                    else if path.path.contains("/Application Support/") { type = .applicationSupport }
+                    else if path.path.contains("/Saved Application State/") { type = .savedState }
+                    else { type = .developer }
+                    
+                    files.append(ResidualFile(path: path, type: type, size: size))
+                }
             }
         }
         

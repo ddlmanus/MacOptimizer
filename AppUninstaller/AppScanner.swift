@@ -15,33 +15,47 @@ class AppScanner: ObservableObject {
             apps.removeAll()
         }
         
-        let applicationsPaths = [
+        // 扫描多个可能的应用安装位置
+        let homeDir = URL(fileURLWithPath: NSHomeDirectory())
+        var applicationsPaths: [URL] = [
+            // 标准安装位置
             URL(fileURLWithPath: "/Applications"),
-            URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications")
+            homeDir.appendingPathComponent("Applications"),
+            // System applications (read-only, but can be listed)
+            URL(fileURLWithPath: "/System/Applications"),
+            // Utilities
+            URL(fileURLWithPath: "/Applications/Utilities"),
+            // Homebrew Cask applications
+            URL(fileURLWithPath: "/opt/homebrew/Caskroom"),
+            URL(fileURLWithPath: "/usr/local/Caskroom"),
+            
+            // 便携式应用可能存放的位置 (无需安装直接运行)
+            homeDir.appendingPathComponent("Downloads"),
+            homeDir.appendingPathComponent("Desktop"),
+            homeDir.appendingPathComponent("Documents"),
+            // 一些用户可能直接把app放在主目录
+            homeDir
         ]
         
+        // 也扫描 /Applications 下的子文件夹（有些开发者把应用放在子文件夹里）
+        let mainAppsPath = URL(fileURLWithPath: "/Applications")
+        if let subdirs = try? fileManager.contentsOfDirectory(at: mainAppsPath, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+            for subdir in subdirs {
+                var isDir: ObjCBool = false
+                if fileManager.fileExists(atPath: subdir.path, isDirectory: &isDir) && isDir.boolValue && subdir.pathExtension != "app" {
+                    applicationsPaths.append(subdir)
+                }
+            }
+        }
+        
         var scannedApps: [InstalledApp] = []
+        var seenBundleIds = Set<String>()  // 避免重复
         
         for applicationsPath in applicationsPaths {
             guard fileManager.fileExists(atPath: applicationsPath.path) else { continue }
             
-            do {
-                let contents = try fileManager.contentsOfDirectory(
-                    at: applicationsPath,
-                    includingPropertiesForKeys: [.isDirectoryKey],
-                    options: [.skipsHiddenFiles]
-                )
-                
-                for url in contents {
-                    if url.pathExtension == "app" {
-                        if let app = await createApp(from: url) {
-                            scannedApps.append(app)
-                        }
-                    }
-                }
-            } catch {
-                print("扫描应用目录失败: \(error)")
-            }
+            // 递归扫描，但限制深度以提高性能
+            await scanDirectory(applicationsPath, depth: 0, maxDepth: 2, scannedApps: &scannedApps, seenBundleIds: &seenBundleIds)
         }
         
         // 按名称排序
@@ -50,6 +64,43 @@ class AppScanner: ObservableObject {
         await MainActor.run { [scannedApps] in
             apps = scannedApps
             isScanning = false
+        }
+    }
+    
+    /// 递归扫描目录
+    private func scanDirectory(_ directory: URL, depth: Int, maxDepth: Int, scannedApps: inout [InstalledApp], seenBundleIds: inout Set<String>) async {
+        guard depth <= maxDepth else { return }
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+            
+            for url in contents {
+                if url.pathExtension == "app" {
+                    if let app = await createApp(from: url) {
+                        // 避免重复（通过 bundle ID）
+                        if let bundleId = app.bundleIdentifier {
+                            if seenBundleIds.contains(bundleId) {
+                                continue
+                            }
+                            seenBundleIds.insert(bundleId)
+                        }
+                        scannedApps.append(app)
+                    }
+                } else {
+                    // 检查是否是目录，如果是则递归
+                    var isDir: ObjCBool = false
+                    if fileManager.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue {
+                        await scanDirectory(url, depth: depth + 1, maxDepth: maxDepth, scannedApps: &scannedApps, seenBundleIds: &seenBundleIds)
+                    }
+                }
+            }
+        } catch {
+            // 忽略无法访问的目录
+            print("扫描目录失败: \(directory.path), 错误: \(error)")
         }
     }
     

@@ -445,10 +445,12 @@ class SystemOptimizer: ObservableObject {
             if item.isEnabled {
                 _ = runCommand("launchctl unload \"\(item.url.path)\"")
             }
-            try fileManager.removeItem(at: item.url)
+            // ⚠️ 安全修复: 使用trashItem代替removeItem
+            try fileManager.trashItem(at: item.url, resultingItemURL: nil)
+            print("[Optimizer] ✅ Moved launch agent to trash: \(item.name)")
             await scanLaunchAgents()
         } catch {
-            print("Failed to remove agent: \(error)")
+            print("[Optimizer] ⚠️ Failed to remove agent: \(error)")
         }
     }
     

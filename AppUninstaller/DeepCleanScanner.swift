@@ -219,6 +219,14 @@ class DeepCleanScanner: ObservableObject {
             var categoryFailures: [URL] = []
             
             for item in categoryItems {
+                // ⚠️ 安全修复: 使用SafetyGuard检查
+                if !SafetyGuard.shared.isSafeToDelete(item.url) {
+                    print("[DeepClean] 🛡️ SafetyGuard blocked deletion: \(item.url.path)")
+                    categoryFailures.append(item.url)
+                    allFailures.append(item.url)
+                    continue
+                }
+                
                 do {
                     try fileManager.trashItem(at: item.url, resultingItemURL: nil)
                     totalDeletedCount += 1
