@@ -135,12 +135,87 @@ class FileRemover {
         
         // 构建一个脚本，逐个删除每个路径，忽略单个错误
         // 这样一个文件删除失败不会影响其他文件
+        // 安全检查：路径校验逻辑
+        func isPathSafeToDelete(_ path: String) -> Bool {
+            let standardPath = (path as NSString).standardizingPath
+            
+            // 1. 绝对禁止的系统根目录
+            let dangerousPrefixes = [
+                "/System",
+                "/bin",
+                "/sbin",
+                "/usr",
+                "/etc",
+                "/var",
+                "/Library", // 系统级Library通常不允许直接删除，除非特定子目录，这里从严
+                "/Applications/Safari.app", // 系统应用保护
+                "/Applications/System Preferences.app"
+            ]
+            
+            if standardPath == "/" { return false }
+            
+            for prefix in dangerousPrefixes {
+                if standardPath.hasPrefix(prefix) {
+                    print("安全拦截: 试图删除受保护的系统路径 \(standardPath)")
+                    return false
+                }
+            }
+            
+            // 2. 必须包含用户主目录 (强制沙盒化思维)
+            // 允许删除 /Applications, /Users/xxx, /Library/xxx (特定)
+            // 但为了防止万一，我们要求路径必须在 /Users 下，或者在 /Applications 下
+            let validPrefixes = [
+                "/Users/",
+                "/Applications/",
+                "/private/var/folders/", // 临时文件
+                "/Volumes/" // 外接驱动器
+            ]
+            
+            var isValid = false
+            for prefix in validPrefixes {
+                if standardPath.hasPrefix(prefix) {
+                    isValid = true
+                    break
+                }
+            }
+            
+            if !isValid {
+                print("安全拦截: 路径不在允许的操作范围内 \(standardPath)")
+                return false
+            }
+            
+            // 3. 检查特殊字符防止 Shell 注入 (虽然有了 shellEscape，双重保障)
+            // 禁止包含连续的 ..
+            if standardPath.contains("..") { return false }
+            
+            return true
+        }
+        
+        // 构建一个脚本，逐个删除每个路径，忽略单个错误
+        // 这样一个文件删除失败不会影响其他文件
         var scriptLines: [String] = []
+        var safePathsCount = 0
+        
         for path in paths {
-            let escapedPath = shellEscape(path.path)
+            let pathStr = path.path
+            
+            // 执行安全检查
+            if !isPathSafeToDelete(pathStr) {
+                print("跳过不安全路径: \(pathStr)")
+                continue
+            }
+            
+            safePathsCount += 1
+            let escapedPath = shellEscape(pathStr)
             // 每个删除命令后加 || true，即使失败也继续
             scriptLines.append("rm -rf \(escapedPath) 2>/dev/null || true")
         }
+        
+        if safePathsCount == 0 {
+            print("没有通过安全检查的有效路径，跳过执行")
+            return Array(repeating: false, count: paths.count)
+        }
+        
         let shellCommands = scriptLines.joined(separator: "; ")
         
         let script = """

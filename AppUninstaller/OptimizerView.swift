@@ -469,7 +469,10 @@ class OptimizerService: ObservableObject {
                 
                 // 仅清理超过 100MB 的缓存
                 if let size = try? item.resourceValues(forKeys: [.totalFileSizeKey]).totalFileSize, size > 100_000_000 {
-                    try? fileManager.removeItem(at: item)
+                    // Safety Check
+                    if SafetyGuard.shared.isSafeToDelete(item) {
+                        try? fileManager.removeItem(at: item)
+                    }
                 }
             }
         }

@@ -879,16 +879,9 @@ struct TrashView: View {
                     .fill(GradientStyles.trash.opacity(0.8))
                     .frame(width: 140, height: 140)
                 
-                if #available(macOS 14.0, *) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 60))
-                        .foregroundColor(.white)
-                        .symbolEffect(.bounce, value: scanner.cleanedCount)
-                } else {
-                    Image(systemName: "trash")
-                        .font(.system(size: 60))
-                        .foregroundColor(.white)
-                }
+                Image(systemName: "trash")
+                    .font(.system(size: 60))
+                    .foregroundColor(.white)
                 
                 // 旋转圈
                 Circle()

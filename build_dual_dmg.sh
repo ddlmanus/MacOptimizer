@@ -24,7 +24,7 @@ EXECUTABLE_NAME="AppUninstaller"
 BUNDLE_NAME="${APP_NAME}.app"
 BUILD_DIR="build_release"
 SOURCE_DIR="AppUninstaller"
-VERSION="4.0.0"
+VERSION="4.0.1"
 
 # DMG 文件名
 DMG_ARM64="${APP_NAME}_v${VERSION}_AppleSilicon.dmg"

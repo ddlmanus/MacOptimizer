@@ -977,10 +977,24 @@ class JunkCleaner: ObservableObject {
     /// 使用管理员权限清理（通过 AppleScript）
     private func cleanWithAdminPrivileges(paths: [String], items: [JunkItem]) async -> (Int64, Bool) {
         var cleanedSize: Int64 = 0
+        var safePaths: [String] = []
         
-        // 构建删除命令
+        // 1. 安全检查
+        for path in paths {
+            if SafetyGuard.shared.isSafeToDelete(URL(fileURLWithPath: path)) {
+                safePaths.append(path)
+            } else {
+                print("[JunkCleaner] 🛡️ Skipped unsafe path in privileged clean: \(path)")
+            }
+        }
+        
+        if safePaths.isEmpty {
+            return (0, false)
+        }
+        
+        // 2. 构建删除命令
         // 使用 rm -rf 
-        let escapedPaths = paths.map { path in
+        let escapedPaths = safePaths.map { path in
             path.replacingOccurrences(of: "'", with: "'\\''")
         }
         
@@ -996,12 +1010,14 @@ class JunkCleaner: ObservableObject {
             
             if error == nil {
                 // 成功，计算清理的大小
-                for path in paths {
+                for path in safePaths {
                     if let item = items.first(where: { $0.path.path == path }) {
                         cleanedSize += item.size
                     }
                 }
                 return (cleanedSize, true)
+            } else {
+                 print("[JunkCleaner] AppleScript error: \(String(describing: error))")
             }
         }
         

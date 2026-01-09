@@ -234,16 +234,9 @@ class ResidualFileScanner {
                     matches = true
                 }
                 
-                // 对于Bundle ID的部分匹配 (例如 com.company.appname 匹配 company 或 appname)
-                if !bundleIdLower.isEmpty {
-                    let components = bundleIdLower.split(separator: ".")
-                    for component in components {
-                        if fileName.contains(String(component)) && component.count > 3 {
-                            matches = true
-                            break
-                        }
-                    }
-                }
+                // 移除危险的 Bundle ID 组件拆分匹配
+                // 原逻辑会将 com.apple.safari 拆分为 apple 并匹配所有包含 apple 的文件，极其危险
+                // 仅保留完整的 Bundle ID 匹配和应用名称匹配
                 
                 if matches {
                     let size = calculateSize(at: url)
