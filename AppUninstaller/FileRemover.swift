@@ -109,16 +109,17 @@ class FileRemover {
     
     /// 普通删除（不提权）
     private func removeItemNormal(at url: URL, moveToTrash: Bool) async -> Bool {
-        do {
-            if moveToTrash {
-                try fileManager.trashItem(at: url, resultingItemURL: nil)
-            } else {
+        if moveToTrash {
+            // 🛡️ 使用 DeletionLogService 记录删除日志，支持恢复
+            return DeletionLogService.shared.logAndDelete(at: url, category: "AppUninstall")
+        } else {
+            do {
                 try fileManager.removeItem(at: url)
+                return true
+            } catch {
+                print("普通删除失败: \(url.path), 错误: \(error)")
+                return false
             }
-            return true
-        } catch {
-            print("普通删除失败: \(url.path), 错误: \(error)")
-            return false
         }
     }
     

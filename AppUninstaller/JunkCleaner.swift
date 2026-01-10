@@ -961,15 +961,12 @@ class JunkCleaner: ObservableObject {
             return false
         }
         
-        // 先尝试移至废纸篓(更安全,可恢复)
-        do {
-            try fileManager.trashItem(at: item.path, resultingItemURL: nil)
-            print("[JunkCleaner] ✅ Moved to trash: \(item.path.lastPathComponent)")
+        // 🛡️ 使用 DeletionLogService 记录删除日志，支持恢复
+        if DeletionLogService.shared.logAndDelete(at: item.path, category: "JunkClean") {
+            print("[JunkCleaner] ✅ Moved to trash with log: \(item.path.lastPathComponent)")
             return true
-        } catch {
-            print("[JunkCleaner] ⚠️ Failed to trash, error: \(error)")
-            // 废纸篓失败,记录但不尝试直接删除(太危险)
-            // 应该提示用户使用sudo权限或手动处理
+        } else {
+            print("[JunkCleaner] ⚠️ Failed to delete: \(item.path.lastPathComponent)")
             return false
         }
     }

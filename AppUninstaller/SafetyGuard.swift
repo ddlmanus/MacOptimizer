@@ -196,6 +196,16 @@ class SafetyGuard {
             // 注意: 这里返回true,但调用者应该谨慎处理
         }
         
+        // 5. 🛡️ 新增: 保护已安装应用的关键目录
+        if let protection = isInstalledAppProtectedPath(url) {
+            if !protection.isSafeSubdir {
+                print("[SafetyGuard] 🛡️ Installed app data protected: \(path) (app: \(protection.bundleId))")
+                return false
+            }
+            // 如果是安全子目录 (Caches, tmp, Logs)，允许删除
+            print("[SafetyGuard] ✅ Safe cache subdir for installed app: \(path)")
+        }
+        
         return true
     }
     
@@ -358,6 +368,77 @@ class SafetyGuard {
         }
         
         return false
+    }
+    
+    /// 🛡️ 检查路径是否是已安装应用的受保护目录
+    /// - Parameter url: 要检查的路径
+    /// - Returns: 如果是已安装应用的目录，返回 (bundleId, 是否是安全子目录)；否则返回 nil
+    private func isInstalledAppProtectedPath(_ url: URL) -> (bundleId: String, isSafeSubdir: Bool)? {
+        let path = url.path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        
+        // 安全的子目录名称 - 这些可以安全删除
+        let safeSubdirNames: Set<String> = [
+            "Cache", "Caches", "cache", "caches",
+            "tmp", "Tmp", "temp", "Temp",
+            "Logs", "logs", "Log", "log",
+            "GPUCache", "ShaderCache", "Code Cache",
+            "CachedData", "CachedExtensions"
+        ]
+        
+        // 1. 检查 ~/Library/Containers/<bundle-id>
+        let containersPath = home + "/Library/Containers/"
+        if path.hasPrefix(containersPath) {
+            let relativePath = String(path.dropFirst(containersPath.count))
+            let components = relativePath.components(separatedBy: "/")
+            guard let bundleId = components.first, !bundleId.isEmpty else { return nil }
+            
+            // 检查应用是否已安装
+            if isApplicationInstalled(bundleId) {
+                // 检查是否是安全子目录
+                // 例如: ~/Library/Containers/com.xxx/Data/Library/Caches
+                let isSafe = components.count > 1 && components.contains { safeSubdirNames.contains($0) }
+                return (bundleId, isSafe)
+            }
+        }
+        
+        // 2. 检查 ~/Library/Application Support/<app-name>
+        let appSupportPath = home + "/Library/Application Support/"
+        if path.hasPrefix(appSupportPath) {
+            let relativePath = String(path.dropFirst(appSupportPath.count))
+            let components = relativePath.components(separatedBy: "/")
+            guard let appName = components.first, !appName.isEmpty else { return nil }
+            
+            // 跳过通用目录（不属于特定应用）
+            let genericDirs: Set<String> = [
+                "AddressBook", "CallHistoryDB", "CallHistoryTransactions",
+                "CloudDocs", "CrashReporter", "FileProvider", "Knowledge",
+                "MobileSync", "SyncServices", "Ubiquity"
+            ]
+            if genericDirs.contains(appName) { return nil }
+            
+            // 检查应用是否已安装
+            if isApplicationInstalled(appName) {
+                // 检查是否是安全子目录
+                let isSafe = components.count > 1 && components.contains { safeSubdirNames.contains($0) }
+                return (appName, isSafe)
+            }
+        }
+        
+        // 3. 检查 ~/Library/Caches/<bundle-id> - 这总是安全的
+        let cachesPath = home + "/Library/Caches/"
+        if path.hasPrefix(cachesPath) {
+            let relativePath = String(path.dropFirst(cachesPath.count))
+            let components = relativePath.components(separatedBy: "/")
+            guard let bundleId = components.first, !bundleId.isEmpty else { return nil }
+            
+            if isApplicationInstalled(bundleId) {
+                // ~/Library/Caches 下的内容总是安全的
+                return (bundleId, true)
+            }
+        }
+        
+        return nil
     }
     
     /// 获取所有已安装应用的标识符 (带缓存)

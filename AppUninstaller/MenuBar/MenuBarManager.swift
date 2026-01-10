@@ -23,14 +23,45 @@ class MenuBarManager: NSObject, ObservableObject {
     @Published var isOpen: Bool = false
     @Published var currentDetailRoute: MenuBarRoute? = nil
     
+    // 标记是否已完成初始化
+    private var isSetupComplete = false
+    
     override init() {
         super.init()
+        // 延迟初始化，确保应用程序完全启动后再创建 status item
+        // 这可以防止在 app 启动时访问 NSStatusBar 导致的崩溃
+        DispatchQueue.main.async { [weak self] in
+            self?.performDelayedSetup()
+        }
+    }
+    
+    /// 延迟执行的设置，确保 NSApp 已完全初始化
+    private func performDelayedSetup() {
+        guard !isSetupComplete else { return }
+        isSetupComplete = true
+        
         setupStatusItem()
         setupWindow()
         setupAutoClose()
     }
     
+    /// 公共方法：确保设置完成（用于需要立即使用的场景）
+    func ensureSetup() {
+        if !isSetupComplete {
+            performDelayedSetup()
+        }
+    }
+    
     private func setupStatusItem() {
+        // 确保在主线程且 NSApp 已准备好
+        guard Thread.isMainThread, NSApp != nil else {
+            print("[MenuBarManager] ⚠️ NSApp not ready, deferring status item setup")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.setupStatusItem()
+            }
+            return
+        }
+        
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
             // Try to load custom Application.icns

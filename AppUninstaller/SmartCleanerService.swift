@@ -2437,11 +2437,10 @@ class SmartCleanerService: ObservableObject {
             for i in 0..<duplicateGroups.count {
                 for j in 0..<duplicateGroups[i].files.count {
                     if duplicateGroups[i].files[j].isSelected {
-                        do {
-                            try fileManager.trashItem(at: duplicateGroups[i].files[j].url, resultingItemURL: nil)
+                        if DeletionLogService.shared.logAndDelete(at: duplicateGroups[i].files[j].url, category: "Duplicates") {
                             freedSize += duplicateGroups[i].files[j].size
                             success += 1
-                        } catch {
+                        } else {
                             failed += 1
                         }
                     }
@@ -2453,11 +2452,10 @@ class SmartCleanerService: ObservableObject {
             for i in 0..<similarPhotoGroups.count {
                 for j in 0..<similarPhotoGroups[i].files.count {
                     if similarPhotoGroups[i].files[j].isSelected {
-                        do {
-                            try fileManager.trashItem(at: similarPhotoGroups[i].files[j].url, resultingItemURL: nil)
+                        if DeletionLogService.shared.logAndDelete(at: similarPhotoGroups[i].files[j].url, category: "SimilarPhotos") {
                             freedSize += similarPhotoGroups[i].files[j].size
                             success += 1
-                        } catch {
+                        } else {
                             failed += 1
                         }
                     }
@@ -2467,25 +2465,23 @@ class SmartCleanerService: ObservableObject {
             
         case .localizations:
             for file in localizationFiles where file.isSelected {
-                do {
-                    // ⚠️ 安全修复: 使用trashItem代替removeItem
-                    try fileManager.trashItem(at: file.url, resultingItemURL: nil)
+                // ⚠️ 安全修复: 使用 DeletionLogService 记录并删除
+                if DeletionLogService.shared.logAndDelete(at: file.url, category: "Localizations") {
                     freedSize += file.size
                     success += 1
-                } catch {
+                } else {
                     failed += 1
-                    print("[SmartCleaner] ⚠️ Failed to delete localization: \(error)")
+                    print("[SmartCleaner] ⚠️ Failed to delete localization: \(file.name)")
                 }
             }
             await scanLocalizations()
             
         case .largeFiles:
             for file in largeFiles where file.isSelected {
-                do {
-                    try fileManager.trashItem(at: file.url, resultingItemURL: nil)
+                if DeletionLogService.shared.logAndDelete(at: file.url, category: "LargeFiles") {
                     freedSize += file.size
                     success += 1
-                } catch {
+                } else {
                     failed += 1
                 }
             }
@@ -2745,14 +2741,13 @@ class SmartCleanerService: ObservableObject {
                 return false
             }
             
-            // 2. 优先移动到废纸篓 (更安全,可恢复)
-            do {
-                try fileManager.trashItem(at: url, resultingItemURL: nil)
-                print("[SmartCleaner] ✅ Moved to trash: \(file.name)")
+            // 2. 🛡️ 使用 DeletionLogService 安全删除并记录日志
+            // 这样文件可以从废纸篓恢复到原位置
+            if DeletionLogService.shared.logAndDelete(at: url, category: "SmartClean") {
+                print("[SmartCleaner] ✅ Moved to trash with log: \(file.name)")
                 return true
-            } catch {
-                print("[SmartCleaner] ⚠️ Failed to trash: \(error.localizedDescription)")
-                // 移至废纸篓失败,记录但不再尝试直接删除(太危险)
+            } else {
+                print("[SmartCleaner] ⚠️ Failed to delete: \(file.name)")
                 failedFiles.append(file)
                 return false
             }

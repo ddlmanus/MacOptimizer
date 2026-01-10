@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Network
 
 // MARK: - Update Checker Service
 class UpdateCheckerService: ObservableObject {
@@ -16,13 +17,47 @@ class UpdateCheckerService: ObservableObject {
     private let repoOwner = "ddlmanus"
     private let repoName = "MacOptimizer"
     
+    // 网络状态监控
+    private var networkMonitor: NWPathMonitor?
+    private var isNetworkAvailable: Bool = true
+    
     var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.0.4"
     }
     
-    private init() {}
+    private init() {
+        setupNetworkMonitor()
+    }
+    
+    deinit {
+        networkMonitor?.cancel()
+    }
+    
+    /// 设置网络状态监控
+    private func setupNetworkMonitor() {
+        networkMonitor = NWPathMonitor()
+        networkMonitor?.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.isNetworkAvailable = (path.status == .satisfied)
+            }
+        }
+        let queue = DispatchQueue(label: "NetworkMonitor")
+        networkMonitor?.start(queue: queue)
+    }
     
     func checkForUpdates() async {
+        // 延迟检查，确保网络监控器已初始化
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+        
+        // 检查网络是否可用
+        guard isNetworkAvailable else {
+            print("[UpdateChecker] ⚠️ Network not available, skipping update check")
+            await MainActor.run {
+                self.errorMessage = "无网络连接"
+            }
+            return
+        }
+        
         await MainActor.run {
             self.isChecking = true
             self.errorMessage = nil
@@ -39,9 +74,17 @@ class UpdateCheckerService: ObservableObject {
         
         do {
             var request = URLRequest(url: url)
-            request.timeoutInterval = 10
+            // 使用更短的超时时间，避免在代理/网络问题时长时间挂起
+            request.timeoutInterval = 5
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // 使用不走代理的配置（可选，如果代理有问题）
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 5
+            config.timeoutIntervalForResource = 10
+            config.waitsForConnectivity = false // 不等待网络恢复
+            
+            let session = URLSession(configuration: config)
+            let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw URLError(.badServerResponse)
@@ -68,9 +111,9 @@ class UpdateCheckerService: ObservableObject {
         } catch {
             await MainActor.run {
                 self.isChecking = false
+                // 在网络错误时静默处理，不影响应用启动
                 self.errorMessage = error.localizedDescription
-                // Fallback for demo/testing if network fails or repo private
-                print("Update check failed: \(error.localizedDescription)")
+                print("[UpdateChecker] ⚠️ Update check failed (possibly no network): \(error.localizedDescription)")
             }
         }
     }
@@ -82,3 +125,4 @@ struct GitHubRelease: Codable {
     let html_url: String
     let body: String
 }
+
