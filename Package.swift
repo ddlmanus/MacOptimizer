@@ -18,8 +18,8 @@ let package = Package(
                 "compile_errors.txt"
             ],
             resources: [
-                .process("Application.icns"),
-                .process("Application_back.icns"),
+                .process("AppIcon.icns"),
+                .process("AppIcon_back.icns"),
                 .process("ButtonClick.m4a"),
                 .process("CleanDidFinish-Winter.m4a"),
                 .process("CleanDidFinish.m4a"),
@@ -43,6 +43,12 @@ let package = Package(
                 .process("yinsi.png"),
                 .process("youhua.png")
             ]
+        ),
+        .testTarget(
+            name: "AppUninstallerTests",
+            dependencies: ["AppUninstaller"]
         )
     ]
 )
+
+

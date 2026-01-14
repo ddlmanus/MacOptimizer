@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Quartz
 
 struct JunkCleanerView: View {
     // 扫描状态枚举
@@ -663,8 +664,8 @@ struct JunkSidebarView: View {
             List(selection: $selectedCategory) {
                 ForEach(cleaner.junkItems.map { $0.type }.removingDuplicates(), id: \.self) { type in
                     JunkCategoryRow(type: type, 
-                                items: cleaner.junkItems.filter { $0.type == type },
-                                isSelected: selectedCategory == type)
+                                isSelected: selectedCategory == type,
+                                cleaner: cleaner)
                         .onTapGesture {
                             selectedCategory = type
                         }
@@ -722,7 +723,7 @@ struct JunkDetailContentView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(items) { item in
-                            JunkItemRow(item: item, onTap: {})
+                            JunkItemRow(item: item)
                         }
                     }
                     .padding(.bottom, 100) // Space for floating button
@@ -753,11 +754,38 @@ extension Array where Element: Hashable {
 // Category Row View
 struct JunkCategoryRow: View {
     let type: JunkType
-    let items: [JunkItem]
     let isSelected: Bool
+    @ObservedObject var cleaner: JunkCleaner
+    @ObservedObject private var loc = LocalizationManager.shared
+    @State private var isHovering: Bool = false
     
+    // 实时从 cleaner 获取 items（而不是使用快照）
+    private var items: [JunkItem] {
+        cleaner.junkItems.filter { $0.type == type }
+    }
+    
+    // 只计算已选中的文件大小
     var totalSize: Int64 {
-        items.reduce(0) { $0 + $1.size }
+        items.filter { $0.isSelected }.reduce(0) { $0 + $1.size }
+    }
+    
+    // 勾选状态：未选、部分选中、全选
+    enum CheckState {
+        case none      // 未选
+        case partial   // 部分选中
+        case all       // 全选
+    }
+    
+    var checkState: CheckState {
+        guard !items.isEmpty else { return .none }
+        let selectedCount = items.filter { $0.isSelected }.count
+        if selectedCount == 0 {
+            return .none
+        } else if selectedCount == items.count {
+            return .all
+        } else {
+            return .partial
+        }
     }
     
     var isChecked: Bool {
@@ -785,27 +813,47 @@ struct JunkCategoryRow: View {
         HStack {
             // Selection Pill Background
             HStack {
-                 Button(action: {
-                     let newState = !isChecked
-                     items.forEach { $0.isSelected = newState }
-                     ScanServiceManager.shared.junkCleaner.objectWillChange.send()
-                 }) {
-                     ZStack {
+                 // 勾选框 - 使用 .onTapGesture 确保可靠点击
+                 ZStack {
+                     Circle()
+                         .stroke(checkState != .none ? Color(hex: "40C4FF") : Color.white.opacity(0.3), lineWidth: 1.5)
+                         .frame(width: 20, height: 20)
+                     
+                     if checkState == .all {
+                         // 全选状态：实心圆+对勾
                          Circle()
-                             .stroke(isChecked ? Color(hex: "40C4FF") : Color.white.opacity(0.3), lineWidth: 1.5)
-                             .frame(width: 20, height: 20)
-                         
-                         if isChecked {
-                             Circle()
-                                .fill(Color(hex: "40C4FF"))
-                                .frame(width: 20, height: 20)
-                             Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                         }
+                            .fill(Color(hex: "40C4FF"))
+                            .frame(width: 20, height: 20)
+                         Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                     } else if checkState == .partial {
+                         // 半勾选状态：实心圆+减号
+                         Circle()
+                            .fill(Color(hex: "40C4FF"))
+                            .frame(width: 20, height: 20)
+                         Image(systemName: "minus")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
                      }
                  }
-                 .buttonStyle(.plain)
+                 .frame(width: 20, height: 20)
+                 .contentShape(Rectangle())
+                 .onTapGesture {
+                     // 在主线程上同步执行，避免时序问题
+                     Task { @MainActor in
+                         let newState: Bool
+                         if checkState == .all {
+                             // 全选 -> 取消全选
+                             newState = false
+                         } else {
+                             // 未选或部分选中 -> 全选
+                             newState = true
+                         }
+                         items.forEach { $0.isSelected = newState }
+                         cleaner.objectWillChange.send()
+                     }
+                 }
                  .padding(.leading, 12)
                 
                 // Icon
@@ -836,12 +884,45 @@ struct JunkCategoryRow: View {
                     .padding(.trailing, 16)
             }
             .padding(.vertical, 8)
-            .background(isSelected ? Color.white.opacity(0.15) : Color.clear) // Rounded Highlighting
-            .cornerRadius(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        isSelected ? Color.white.opacity(0.15) : 
+                        (isHovering ? Color.white.opacity(0.08) : Color.clear)
+                    )
+            )
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .contextMenu {
+            // 全选
+            Button {
+                items.forEach { $0.isSelected = true }
+                cleaner.objectWillChange.send()
+            } label: {
+                Label(
+                    loc.currentLanguage == .chinese ? "全选 \"\(type.rawValue)\"" : "Select All \"\(type.rawValue)\"",
+                    systemImage: "checkmark.circle.fill"
+                )
+            }
+            .disabled(checkState == .all)
+            
+            // 取消全选
+            Button {
+                items.forEach { $0.isSelected = false }
+                cleaner.objectWillChange.send()
+            } label: {
+                Label(
+                    loc.currentLanguage == .chinese ? "取消全选 \"\(type.rawValue)\"" : "Deselect All \"\(type.rawValue)\"",
+                    systemImage: "circle"
+                )
+            }
+            .disabled(checkState == .none)
+        }
     }
 }
 
@@ -849,33 +930,46 @@ struct JunkCategoryRow: View {
 // MARK: - Subviews
 struct JunkItemRow: View {
     @ObservedObject var item: JunkItem
-    var onTap: () -> Void
+    @ObservedObject private var loc = LocalizationManager.shared
+    @State private var isHovering: Bool = false
     
     var body: some View {
-        let binding = Binding<Bool>(
-            get: { item.isSelected },
-            set: { newValue in
-                item.isSelected = newValue
-                ScanServiceManager.shared.junkCleaner.objectWillChange.send()
-            }
-        )
-        
         HStack(spacing: 16) {
-            // Checkbox
-            Toggle("", isOn: binding)
-                .toggleStyle(CircleCheckboxStyle()) // Use custom style
-                .labelsHidden()
+            // Checkbox - 使用独立的点击区域，避免状态冲突
+            ZStack {
+                Circle()
+                    .stroke(item.isSelected ? Color(hex: "40C4FF") : Color.white.opacity(0.3), lineWidth: 1.5)
+                    .frame(width: 18, height: 18)
+                
+                if item.isSelected {
+                    Circle()
+                        .fill(Color(hex: "40C4FF"))
+                        .frame(width: 18, height: 18)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: 18, height: 18)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // 在主线程上同步执行，避免时序问题
+                Task { @MainActor in
+                    item.isSelected.toggle()
+                    ScanServiceManager.shared.junkCleaner.objectWillChange.send()
+                }
+            }
             
             // File Icon
             Image(nsImage: NSWorkspace.shared.icon(forFile: item.path.path))
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 28, height: 28) // Slightly smaller than before
+                .frame(width: 28, height: 28)
             
             // Name
             Text(item.name)
                 .font(.system(size: 14))
-                .foregroundColor(.white) // Brighter text
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .truncationMode(.middle)
             
@@ -884,18 +978,62 @@ struct JunkItemRow: View {
             // Size
             Text(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file))
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.7)) // More visible grey
+                .foregroundColor(.white.opacity(0.7))
         }
         .padding(.horizontal, 30)
-        .padding(.vertical, 10) // More spacing
-        .background(Color.clear)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovering ? Color.white.opacity(0.08) : Color.clear)
+        )
+        .onHover { hovering in
+            isHovering = hovering
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
+        .contextMenu {
+            // 取消选择/选择
+            Button {
+                item.isSelected.toggle()
+                ScanServiceManager.shared.junkCleaner.objectWillChange.send()
+            } label: {
+                Label(
+                    item.isSelected ? 
+                        (loc.currentLanguage == .chinese ? "取消选择 \"\(item.name)\"" : "Deselect \"\(item.name)\"") :
+                        (loc.currentLanguage == .chinese ? "选择 \"\(item.name)\"" : "Select \"\(item.name)\""),
+                    systemImage: item.isSelected ? "checkmark.circle.fill" : "circle"
+                )
+            }
+            
+            Divider()
+            
+            // 在访达中显示
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([item.path])
+            } label: {
+                Label(
+                    loc.currentLanguage == .chinese ? "在 \"访达\" 中显示" : "Show in Finder",
+                    systemImage: "folder"
+                )
+            }
+            
+            // 快速查看
+            Button {
+                quickLookFile()
+            } label: {
+                Label(
+                    loc.currentLanguage == .chinese ? "快速查看 \"\(item.name)\"" : "Quick Look \"\(item.name)\"",
+                    systemImage: "eye"
+                )
+            }
+        }
+    }
+    
+    // 快速查看文件
+    private func quickLookFile() {
+        guard let panel = QLPreviewPanel.shared() else { return }
+        if panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
         }
     }
 }

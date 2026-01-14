@@ -179,15 +179,33 @@ class SafetyGuard {
     // MARK: - 公共API
     
     /// 检查文件/目录是否可以安全删除
-    /// - Parameter url: 要检查的文件/目录URL
+    /// - Parameters:
+    ///   - url: 要检查的文件/目录URL
+    ///   - ignoreProtection: 是否忽略目录保护（用于用户明确选择的大文件清理）
     /// - Returns: true表示安全,false表示不能删除
-    func isSafeToDelete(_ url: URL) -> Bool {
+    func isSafeToDelete(_ url: URL, ignoreProtection: Bool = false) -> Bool {
         let path = url.path
         
         // 1. 检查是否是受保护的目录
+        // 如果 ignoreProtection 为 true (用于大文件清理)，则放宽对 protectedDirectories 的检查
+        // 但仍然禁止删除系统核心目录
         if isProtectedPath(path) {
-            print("[SafetyGuard] 🛡️ Protected path, cannot delete: \(path)")
-            return false
+            if ignoreProtection {
+                // 定义绝对不可删除的核心系统目录
+                let coreSystemPaths = ["/System", "/usr", "/bin", "/sbin", "/private/var/db", "/private/var/root", "/Library/Apple", "/Library/Security"]
+                let isCore = coreSystemPaths.contains { path.hasPrefix($0) }
+                
+                if isCore {
+                    print("[SafetyGuard] 🛡️ Core system path, cannot delete even with bypass: \(path)")
+                    return false
+                } else {
+                    print("[SafetyGuard] ⚠️ Bypassing directory protection for: \(path)")
+                    // 允许继续后续检查
+                }
+            } else {
+                print("[SafetyGuard] 🛡️ Protected path, cannot delete: \(path)")
+                return false
+            }
         }
         
         // 2. 检查是否是系统文件

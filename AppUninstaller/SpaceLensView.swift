@@ -4,7 +4,7 @@ import AVFoundation
 
 struct SpaceLensView: View {
     @StateObject private var scanner = SpaceLensScanner()
-    @State private var viewState: Int = 0 // 0: Landing, 1: Scanning, 2: Results
+    @State private var viewState: Int = 0 // 0: Landing, 1: Scanning, 2: Results, 3: Cleanup Results
     
     // UI State
     @State private var navigationStack: [FileNode] = []
@@ -19,6 +19,8 @@ struct SpaceLensView: View {
     // Remove Functionality
     @State private var showRemoveConfirmation = false
     @State private var itemsToRemove: [FileNode] = []
+    @State private var cleanupResults: (success: Int, failed: Int, size: Int64)? = nil
+    @State private var failedFiles: [FailedFileInfo] = []
     
     @ObservedObject private var loc = LocalizationManager.shared
     
@@ -44,8 +46,33 @@ struct SpaceLensView: View {
                 landingView
             } else if viewState == 1 {
                 scanningView
-            } else {
+            } else if viewState == 2 {
                 resultsView
+            } else if viewState == 3 {
+                // Show cleanup results
+                if let results = cleanupResults {
+                    if failedFiles.isEmpty {
+                        CleanupResultsView(
+                            cleanedSize: results.size,
+                            cleanedCount: results.success,
+                            recommendations: [],
+                            onDismiss: {
+                                resetToLanding()
+                            }
+                        )
+                    } else {
+                        CleanupDetailResultsView(
+                            cleanedSize: results.size,
+                            cleanedCount: results.success,
+                            failedFiles: failedFiles,
+                            failedCount: results.failed,
+                            totalAttempted: results.success + results.failed,
+                            onDismiss: {
+                                resetToLanding()
+                            }
+                        )
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -402,67 +429,102 @@ struct SpaceLensView: View {
                 .clipped()
 
                  .overlay(alignment: .bottom) {
-                     HStack(spacing: 20) {
-                         // Floating Remove Button (Overlay to ensure on top and position)
-                         Button(action: {
-                              prepareForRemoval()
-                         }) {
-                             ZStack {
-                                 Circle()
-                                     .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                     .frame(width: 90, height: 90)
-                                 
-                                 Circle()
-                                     .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom))
-                                     .frame(width: 80, height: 80)
-                                     .overlay(
-                                         Circle()
-                                             .stroke(Color.white, lineWidth: 2)
-                                     )
-                                     .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
-                                 
-                                 Text(loc.currentLanguage == .chinese ? "移除" : "Remove")
-                                     .font(.system(size: 16, weight: .semibold))
-                                     .foregroundColor(.white)
-                             }
-                         }
-                         .buttonStyle(.plain)
-                         
-                         // Stats Bar
-                         if selectedSize > 0 {
-                             HStack(spacing: 0) {
-                                 Text(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))
-                                     .font(.system(size: 14, weight: .regular))
-                                     .foregroundColor(.white.opacity(0.8))
-                                     .padding(.horizontal, 16)
-                                 
-                                 Divider()
-                                     .background(Color.white.opacity(0.2))
-                                     .frame(height: 20)
-                                 
-                                 Button(action: {
-                                     showSelectedItemsPopover.toggle()
-                                 }) {
-                                     Text(loc.currentLanguage == .chinese ? "查看所选内容" : "View Selected")
-                                         .font(.system(size: 13, weight: .medium))
+                     VStack(spacing: 16) {
+                         // Control Bar - Select All / Deselect All
+                         if let current = currentNode, !current.children.isEmpty {
+                             HStack(spacing: 12) {
+                                 Button(action: selectAllItems) {
+                                     Text(loc.currentLanguage == .chinese ? "全选" : "Select All")
+                                         .font(.system(size: 12, weight: .medium))
                                          .foregroundColor(.white)
-                                         .padding(.horizontal, 16)
-                                         .padding(.vertical, 10)
-                                         .contentShape(Rectangle())
+                                         .padding(.horizontal, 12)
+                                         .padding(.vertical, 6)
+                                         .background(Color.white.opacity(0.15))
+                                         .cornerRadius(6)
                                  }
                                  .buttonStyle(.plain)
-                                 .popover(isPresented: $showSelectedItemsPopover, arrowEdge: .bottom) {
-                                     SelectedItemsList(items: selectedItems)
+                                 
+                                 Button(action: deselectAllItems) {
+                                     Text(loc.currentLanguage == .chinese ? "取消全选" : "Deselect All")
+                                         .font(.system(size: 12, weight: .medium))
+                                         .foregroundColor(.white)
+                                         .padding(.horizontal, 12)
+                                         .padding(.vertical, 6)
+                                         .background(Color.white.opacity(0.15))
+                                         .cornerRadius(6)
+                                 }
+                                 .buttonStyle(.plain)
+                                 
+                                 Spacer()
+                             }
+                             .padding(.horizontal, 20)
+                         }
+                         
+                         // Main Action Bar
+                         HStack(spacing: 20) {
+                             // Floating Remove Button
+                             Button(action: {
+                                  prepareForRemoval()
+                             }) {
+                                 ZStack {
+                                     Circle()
+                                         .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                         .frame(width: 90, height: 90)
+                                     
+                                     Circle()
+                                         .fill(LinearGradient(colors: [Color.white.opacity(0.2), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                                         .frame(width: 80, height: 80)
+                                         .overlay(
+                                             Circle()
+                                                 .stroke(Color.white, lineWidth: 2)
+                                         )
+                                         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                                     
+                                     Text(loc.currentLanguage == .chinese ? "移除" : "Remove")
+                                         .font(.system(size: 16, weight: .semibold))
+                                         .foregroundColor(.white)
                                  }
                              }
-                             .background(Color.black.opacity(0.6))
-                             .background(.ultraThinMaterial)
-                             .cornerRadius(8)
-                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                             .buttonStyle(.plain)
+                             
+                             // Stats Bar
+                             if selectedSize > 0 {
+                                 HStack(spacing: 0) {
+                                     Text(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))
+                                         .font(.system(size: 14, weight: .regular))
+                                         .foregroundColor(.white.opacity(0.8))
+                                         .padding(.horizontal, 16)
+                                     
+                                     Divider()
+                                         .background(Color.white.opacity(0.2))
+                                         .frame(height: 20)
+                                     
+                                     Button(action: {
+                                         showSelectedItemsPopover.toggle()
+                                     }) {
+                                         Text(loc.currentLanguage == .chinese ? "查看所选内容" : "View Selected")
+                                             .font(.system(size: 13, weight: .medium))
+                                             .foregroundColor(.white)
+                                             .padding(.horizontal, 16)
+                                             .padding(.vertical, 10)
+                                             .contentShape(Rectangle())
+                                     }
+                                     .buttonStyle(.plain)
+                                     .popover(isPresented: $showSelectedItemsPopover, arrowEdge: .top) {
+                                         SelectedItemsList(items: selectedItems)
+                                     }
+                                 }
+                                 .background(Color.black.opacity(0.6))
+                                 .background(.ultraThinMaterial)
+                                 .cornerRadius(8)
+                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                             }
+                             
+                             Spacer()
                          }
+                         .padding(.horizontal, 20)
                      }
                      .padding(.bottom, 40)
-                     .offset(x: -60) // Heuristic adjustment
                  }
 
             }
@@ -561,12 +623,8 @@ struct SpaceLensView: View {
     
     // MARK: - Layout Algorithm
     func calculateLayout(for node: FileNode) {
-        // Center is (0,0) relative.
-        // We pack children around it.
-        // Heuristic:
-        // Largest children closest?
-        // Let's use a "Flower" pattern for simplicity but effectiveness.
-        // Or a fixed set of orbital slots.
+        // Improved layout algorithm to prevent bubble overlaps
+        // Uses a force-directed approach with collision detection
         
         let children = node.children.prefix(12) // Limit displayed bubbles
         if children.isEmpty { return }
@@ -574,44 +632,54 @@ struct SpaceLensView: View {
         // Base Unit
         let centerR: CGFloat = 110 // Radius of center bubble
         
-        // Arrange in a circle?
-        // Spiral?
-        // Let's try Spiral packing.
-        
-        var angle: CGFloat = 0
-        var radius: CGFloat = centerR + 20 // Start just outside center
-        
-        var positions: [UUID: CGPoint] = [:]
-        var sizes: [UUID: CGFloat] = [:]
-        
         // Normalize sizes for visualization
         // Max bubble size = 180, Min = 60
         let maxSize: CGFloat = 180
         let minSize: CGFloat = 70
         let maxFileSize = children.first?.size ?? 1
         
+        var positions: [UUID: CGPoint] = [:]
+        var sizes: [UUID: CGFloat] = [:]
+        
+        // Calculate bubble sizes first
         for child in children {
-            // Calculate scale
             let scale = CGFloat(child.size) / CGFloat(maxFileSize)
             let bubSize = minSize + (maxSize - minSize) * sqrt(scale)
             sizes[child.id] = bubSize
+        }
+        
+        // Arrange in concentric circles to prevent overlaps
+        // Group bubbles by size and place them in rings
+        let sortedChildren = children.sorted { $0.size > $1.size }
+        
+        var angle: CGFloat = 0
+        var currentRing: Int = 0
+        var itemsInRing: Int = 0
+        let itemsPerRing: Int = 4
+        
+        for (index, child) in sortedChildren.enumerated() {
+            let bubSize = sizes[child.id] ?? 70
             
-            // Position
-            // Increase radius based on bubble size to prevent overlap
-            let effectiveR = radius + bubSize/2
-            let x = cos(angle) * effectiveR
-            let y = sin(angle) * effectiveR
+            // Calculate ring radius based on bubble size
+            let ringRadius = centerR + 40 + CGFloat(currentRing) * (bubSize + 40)
+            
+            // Calculate angle for this position
+            let itemsInCurrentRing = min(itemsPerRing, sortedChildren.count - index)
+            let angleStep = (2 * .pi) / CGFloat(itemsInCurrentRing)
+            let itemAngle = angle + angleStep * CGFloat(itemsInRing)
+            
+            // Calculate position
+            let x = cos(itemAngle) * ringRadius
+            let y = sin(itemAngle) * ringRadius
             
             positions[child.id] = CGPoint(x: x, y: y)
             
-            // Increment angle and radius for spiral
-            // Larger bubbles take more angle space
-            let angleStep = (bubSize + 20) / effectiveR * 1.5 // approximate arc
-            angle += angleStep
-            radius += 10 // Spiral out slightly
-            
-            if angle > .pi * 2 * 2 { // Reset if too far? 
-                 // Keep spiraling
+            // Move to next position
+            itemsInRing += 1
+            if itemsInRing >= itemsPerRing {
+                itemsInRing = 0
+                currentRing += 1
+                angle += angleStep / 2 // Offset next ring for better distribution
             }
         }
         
@@ -669,6 +737,20 @@ struct SpaceLensView: View {
     }
     
     // MARK: - Remove Logic
+    func selectAllItems() {
+        guard let current = currentNode else { return }
+        for child in current.children {
+            child.isSelected = true
+        }
+    }
+    
+    func deselectAllItems() {
+        guard let current = currentNode else { return }
+        for child in current.children {
+            child.isSelected = false
+        }
+    }
+    
     func prepareForRemoval() {
         // Collect selected items from current node's children
         // We only support removing what is visible/selected in the list or the node itself?
@@ -688,46 +770,127 @@ struct SpaceLensView: View {
     }
     
     func deleteSelectedItems() {
-        let fileManager = FileManager.default
-        var deletedIDs: Set<UUID> = []
+        Task {
+            let fileManager = FileManager.default
+            var deletedIDs: Set<UUID> = []
+            var deletedSize: Int64 = 0
+            var failedDeletions: [FailedFileInfo] = []
+            
+            // First attempt: Try direct deletion
+            for item in itemsToRemove {
+                do {
+                    try fileManager.removeItem(at: item.url)
+                    deletedIDs.insert(item.id)
+                    deletedSize += item.size
+                    print("Deleted: \(item.url.path)")
+                } catch {
+                    print("Failed to delete \(item.url.path): \(error)")
+                    // Track failed deletion for retry with admin privileges
+                    failedDeletions.append(FailedFileInfo(
+                        fileName: item.name,
+                        filePath: item.url.path,
+                        fileSize: item.size,
+                        errorReason: error.localizedDescription
+                    ))
+                }
+            }
+            
+            // Second attempt: If there are failures, try with admin privileges
+            if !failedDeletions.isEmpty {
+                let failedPaths = failedDeletions.map { $0.filePath }
+                let adminSuccess = await deleteWithAdminPrivileges(paths: failedPaths)
+                
+                if adminSuccess {
+                    // All admin deletions succeeded
+                    let adminDeletedSize = failedDeletions.reduce(0) { $0 + $1.fileSize }
+                    deletedSize += adminDeletedSize
+                    
+                    // Mark items as deleted by matching paths
+                    for failedItem in failedDeletions {
+                        if let matchingItem = itemsToRemove.first(where: { $0.url.path == failedItem.filePath }) {
+                            deletedIDs.insert(matchingItem.id)
+                        }
+                    }
+                    
+                    failedDeletions.removeAll()
+                }
+            }
+            
+            // Update UI on main thread
+            await MainActor.run {
+                // Remove deleted nodes from current children
+                if let current = currentNode {
+                    current.children.removeAll { deletedIDs.contains($0.id) }
+                    current.size -= deletedSize
+                    if current.size < 0 { current.size = 0 } // Safety
+                    
+                    // Re-layout bubbles
+                    calculateLayout(for: current)
+                    
+                    // Update total scanned size
+                    scanner.totalSize -= deletedSize
+                }
+                
+                // Store cleanup results
+                self.cleanupResults = (
+                    success: deletedIDs.count,
+                    failed: failedDeletions.count,
+                    size: deletedSize
+                )
+                self.failedFiles = failedDeletions
+                
+                // Dismiss confirmation and show results
+                showRemoveConfirmation = false
+                itemsToRemove = []
+                
+                // Play success sound and transition to results
+                playScanCompleteSound {
+                    withAnimation {
+                        self.viewState = 3
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Attempts to delete files with admin privileges using AppleScript
+    private func deleteWithAdminPrivileges(paths: [String]) async -> Bool {
+        var safePaths: [String] = []
         
-        for item in itemsToRemove {
-            do {
-                try fileManager.removeItem(at: item.url)
-                deletedIDs.insert(item.id)
-                print("Deleted: \(item.url.path)")
-            } catch {
-                print("Failed to delete \(item.url.path): \(error)")
-                // Handle error (maybe show alert?)
+        // Validate paths for safety
+        for path in paths {
+            if !path.contains("..") && !path.isEmpty {
+                safePaths.append(path)
             }
         }
         
-        // Update UI
-        // Remove deleted nodes from current children
-        if let current = currentNode {
-            current.children.removeAll { deletedIDs.contains($0.id) }
-            
-            // Recalculate size of current node?
-            // A full recalculation would be recursive, but simple subtraction might be enough for immediate feedback.
-            let deletedSize = itemsToRemove.filter { deletedIDs.contains($0.id) }.reduce(0) { $0 + $1.size }
-            current.size -= deletedSize
-            if current.size < 0 { current.size = 0 } // Safety
-            
-            // Re-layout bubbles
-            calculateLayout(for: current)
-            
-            // Update total scanned size mock?
-            scanner.totalSize -= deletedSize
+        if safePaths.isEmpty {
+            return false
         }
         
-        // Dismiss
-        showRemoveConfirmation = false
-        itemsToRemove = []
+        // Build rm commands
+        let rmCommands = safePaths.map { "rm -rf '\($0)'" }.joined(separator: "; ")
         
-        // Play success sound
-        playScanCompleteSound {
-            // Optional: Show success toast or animation?
+        let script = """
+        do shell script "\(rmCommands)" with administrator privileges
+        """
+        
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            return error == nil
         }
+        
+        return false
+    }
+    
+    func resetToLanding() {
+        viewState = 0
+        navigationStack = []
+        currentNode = nil
+        cleanupResults = nil
+        failedFiles = []
+        scanner.stopScan()
     }
 }
 

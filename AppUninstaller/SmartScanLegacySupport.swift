@@ -251,7 +251,17 @@ struct AllCategoriesDetailSheet: View {
                 
                 // 右栏：文件详情列表
                 if let subcat = selectedSubcategory {
-                    fileDetailPane(for: subcat)
+                    if subcat == .startupItems {
+                        startupItemsRightPane
+                    } else if subcat == .virus {
+                        virusRightPane
+                    } else if subcat == .performanceApps {
+                        performanceAppsRightPane
+                    } else if subcat == .appUpdates {
+                        appUpdatesRightPane
+                    } else {
+                        fileDetailPane(for: subcat)
+                    }
                 } else {
                     emptyStateView
                 }
@@ -595,9 +605,9 @@ struct AllCategoriesDetailSheet: View {
                             Spacer()
                             
                             HStack(spacing: 4) {
-                                Image(systemName: "cpu")
-                                    .foregroundColor(.green)
-                                Text(loc.currentLanguage == .chinese ? "运行中" : "Running")
+                                Image(systemName: "memorychip")
+                                    .foregroundColor(.orange)
+                                Text(app.formattedMemory)
                                     .font(.caption)
                                     .foregroundColor(.white)
                             }

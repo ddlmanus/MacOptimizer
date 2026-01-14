@@ -4,26 +4,45 @@ import Foundation
 class ResidualFileScanner {
     private let fileManager = FileManager.default
     private let homeDirectory = URL(fileURLWithPath: NSHomeDirectory())
+    private let scanCache = CacheManager<String, [ResidualFile]>(maxSizeBytes: 50 * 1024 * 1024) // 50MB cache
+    private let taskQueue = BackgroundTaskQueue()
     
     /// 扫描应用的所有残留文件
     func scanResidualFiles(for app: InstalledApp) async -> [ResidualFile] {
-        var residualFiles: [ResidualFile] = []
+        let cacheKey = app.bundleIdentifier ?? app.name
         
-        let appName = app.name
-        let bundleId = app.bundleIdentifier
+        // Check cache first (5 minute TTL)
+        if let cachedFiles = scanCache.get(cacheKey) {
+            return cachedFiles
+        }
         
-        // 扫描各个位置
-        residualFiles.append(contentsOf: scanPreferences(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanApplicationSupport(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanCaches(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanLogs(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanSavedState(bundleId: bundleId))
-        residualFiles.append(contentsOf: scanContainers(bundleId: bundleId))
-        residualFiles.append(contentsOf: scanGroupContainers(bundleId: bundleId))
-        residualFiles.append(contentsOf: scanCookies(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanLaunchAgents(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanCrashReports(appName: appName, bundleId: bundleId))
-        residualFiles.append(contentsOf: scanDeveloper(appName: appName, bundleId: bundleId))
+        // Perform scan on background thread
+        let residualFiles = await taskQueue.enqueue { [weak self] in
+            guard let self = self else { return [ResidualFile]() }
+            
+            var residualFiles: [ResidualFile] = []
+            
+            let appName = app.name
+            let bundleId = app.bundleIdentifier
+            
+            // 扫描各个位置 - batch process results
+            residualFiles.append(contentsOf: self.scanPreferences(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanApplicationSupport(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanCaches(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanLogs(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanSavedState(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanContainers(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanGroupContainers(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanCookies(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanLaunchAgents(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanCrashReports(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanDeveloper(appName: appName, bundleId: bundleId))
+            
+            return residualFiles
+        }
+        
+        // Cache the results
+        scanCache.set(cacheKey, value: residualFiles, ttl: 300)
         
         return residualFiles
     }
@@ -217,30 +236,34 @@ class ResidualFileScanner {
         do {
             let contents = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
             
-            for url in contents {
-                let fileName = url.lastPathComponent.lowercased()
-                let appNameLower = appName.lowercased()
-                let bundleIdLower = bundleId?.lowercased() ?? ""
-                
-                var matches = false
-                
-                // 匹配应用名称
-                if fileName.contains(appNameLower) {
-                    matches = true
-                }
-                
-                // 匹配Bundle ID
-                if !bundleIdLower.isEmpty && fileName.contains(bundleIdLower) {
-                    matches = true
-                }
-                
-                // 移除危险的 Bundle ID 组件拆分匹配
-                // 原逻辑会将 com.apple.safari 拆分为 apple 并匹配所有包含 apple 的文件，极其危险
-                // 仅保留完整的 Bundle ID 匹配和应用名称匹配
-                
-                if matches {
-                    let size = calculateSize(at: url)
-                    files.append(ResidualFile(path: url, type: type, size: size))
+            // Process in batches to prevent memory spikes
+            let batchSize = 100
+            for batch in contents.chunked(into: batchSize) {
+                for url in batch {
+                    let fileName = url.lastPathComponent.lowercased()
+                    let appNameLower = appName.lowercased()
+                    let bundleIdLower = bundleId?.lowercased() ?? ""
+                    
+                    var matches = false
+                    
+                    // 匹配应用名称
+                    if fileName.contains(appNameLower) {
+                        matches = true
+                    }
+                    
+                    // 匹配Bundle ID
+                    if !bundleIdLower.isEmpty && fileName.contains(bundleIdLower) {
+                        matches = true
+                    }
+                    
+                    // 移除危险的 Bundle ID 组件拆分匹配
+                    // 原逻辑会将 com.apple.safari 拆分为 apple 并匹配所有包含 apple 的文件，极其危险
+                    // 仅保留完整的 Bundle ID 匹配和应用名称匹配
+                    
+                    if matches {
+                        let size = calculateSize(at: url)
+                        files.append(ResidualFile(path: url, type: type, size: size))
+                    }
                 }
             }
         } catch {

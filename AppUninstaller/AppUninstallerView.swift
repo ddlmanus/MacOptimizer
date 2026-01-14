@@ -196,30 +196,24 @@ struct AppUninstallerView: View {
                                 .padding(.top)
                              Spacer()
                         } else {
-                            List {
-                                ForEach(filteredApps) { app in
-                                    AppChecklistRow(
-                                        app: app,
-                                        isSelected: selectedAppIds.contains(app.id),
-                                        onToggleSelection: {
-                                            if selectedAppIds.contains(app.id) {
-                                                selectedAppIds.remove(app.id)
-                                            } else {
-                                                selectedAppIds.insert(app.id)
-                                            }
-                                        },
-                                        onViewDetails: {
-                                            withAnimation {
-                                                detailedApp = app
-                                            }
+                            LazyListView(items: filteredApps, itemHeight: 56) { app in
+                                AppChecklistRow(
+                                    app: app,
+                                    isSelected: selectedAppIds.contains(app.id),
+                                    onToggleSelection: {
+                                        if selectedAppIds.contains(app.id) {
+                                            selectedAppIds.remove(app.id)
+                                        } else {
+                                            selectedAppIds.insert(app.id)
                                         }
-                                    )
-                                    .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                }
+                                    },
+                                    onViewDetails: {
+                                        withAnimation {
+                                            detailedApp = app
+                                        }
+                                    }
+                                )
                             }
-                            .listStyle(.plain)
-                            .scrollContentBackground(.hidden)
                         }
                         
                         // Bottom Bar (Uninstall Action)

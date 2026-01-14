@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Mac优化大师 4.0.2 - 双架构 DMG 打包脚本
+# Mac优化大师 4.0.3 - 双架构 DMG 打包脚本
 # 构建 Apple Silicon 和 Intel 版本的 DMG
 
 set -e
@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}    Mac优化大师 v4.0.2 双架构打包脚本${NC}"
+echo -e "${BLUE}    Mac优化大师 v4.0.3 双架构打包脚本${NC}"
 echo -e "${BLUE}    Apple Silicon + Intel DMG Generator${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
@@ -24,7 +24,7 @@ EXECUTABLE_NAME="AppUninstaller"
 BUNDLE_NAME="${APP_NAME}.app"
 BUILD_DIR="build_release"
 SOURCE_DIR="AppUninstaller"
-VERSION="4.0.2"
+VERSION="4.0.3"
 
 # DMG 文件名
 DMG_ARM64="${APP_NAME}_v${VERSION}_AppleSilicon.dmg"

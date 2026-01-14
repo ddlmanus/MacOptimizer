@@ -4,23 +4,12 @@ import AVKit
 
 struct ContentView: View {
     @State private var selectedModule: AppModule = .smartClean
-    @State private var showIntro = true  // 启用开场视频
+    // @State private var showIntro = false // Video disabled
     
     var body: some View {
         ZStack {
             // 主内容
             mainContent
-            
-            // 开场视频覆盖层
-            if showIntro {
-                IntroVideoView(onComplete: {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        showIntro = false
-                    }
-                })
-                .transition(.opacity)
-                .zIndex(100)
-            }
         }
         .frame(minWidth: 1000, minHeight: 700)
     }

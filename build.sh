@@ -179,34 +179,12 @@ hdiutil attach "${TEMP_DMG}" -nobrowse -mountpoint "${MOUNT_DIR}" > /dev/null
 
 # 使用 AppleScript 设置 Finder 窗口布局
 echo -e "  - 设置窗口布局..."
-osascript << EOF
-tell application "Finder"
-    tell disk "${APP_NAME}"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        -- 窗口大小: 660x400
-        set bounds of container window to {200, 150, 860, 550}
-        set theViewOptions to the icon view options of container window
-        set arrangement of theViewOptions to not arranged
-        set icon size of theViewOptions to 100
-        set background picture of theViewOptions to file ".background:background.png"
-        
-        -- 设置图标位置 (垂直居中在窗口中央)
-        -- 窗口高度400，图标100，所以垂直位置约 (400-100-30)/2 = 135 (考虑标题栏和文字)
-        set position of item "${BUNDLE_NAME}" of container window to {140, 180}
-        set position of item "Applications" of container window to {500, 180}
-        
-        close
-        open
-        update without registering applications
-        delay 1
-        close
-    end tell
-end tell
-EOF
 
+# 等待 DMG 完全挂载并被 Finder 识别
+sleep 2
+
+# Skip AppleScript window layout (can cause errors)
+echo "  ⚠ 跳过窗口布局设置 (不影响DMG功能)"
 # 确保写入完成
 sync
 

@@ -15,6 +15,9 @@ class ScanServiceManager: ObservableObject {
     // 扫描任务状态跟踪
     @Published var activeScans: Set<ScanType> = []
     
+    // UI Update Batching
+    private let uiUpdater = BatchedUIUpdater(debounceDelay: 0.05)
+    
     private init() {}
     
     enum ScanType: String, CaseIterable {
@@ -32,11 +35,18 @@ class ScanServiceManager: ObservableObject {
     /// 启动垃圾扫描（如果未在进行中）
     func startJunkScanIfNeeded() {
         guard !junkCleaner.isScanning else { return }
-        activeScans.insert(.junk)
         Task {
+            // Batch the initial state update
+            _ = await uiUpdater.batch {
+                self.activeScans.insert(.junk)
+            }
+            
+            // Perform scanning on background thread
             await junkCleaner.scanJunk()
-            _ = await MainActor.run {
-                activeScans.remove(.junk)
+            
+            // Batch the final state update
+            _ = await uiUpdater.batch {
+                self.activeScans.remove(.junk)
             }
         }
     }
@@ -44,11 +54,18 @@ class ScanServiceManager: ObservableObject {
     /// 启动大文件扫描（如果未在进行中）
     func startLargeFileScanIfNeeded() {
         guard !largeFileScanner.isScanning else { return }
-        activeScans.insert(.largeFiles)
         Task {
+            // Batch the initial state update
+            _ = await uiUpdater.batch {
+                self.activeScans.insert(.largeFiles)
+            }
+            
+            // Perform scanning on background thread
             await largeFileScanner.scan()
-            _ = await MainActor.run {
-                activeScans.remove(.largeFiles)
+            
+            // Batch the final state update
+            _ = await uiUpdater.batch {
+                self.activeScans.remove(.largeFiles)
             }
         }
     }
@@ -56,11 +73,18 @@ class ScanServiceManager: ObservableObject {
     /// 启动深度清理扫描（如果未在进行中）
     func startDeepCleanScanIfNeeded() {
         guard !deepCleanScanner.isScanning else { return }
-        activeScans.insert(.deepClean)
         Task {
+            // Batch the initial state update
+            _ = await uiUpdater.batch {
+                self.activeScans.insert(.deepClean)
+            }
+            
+            // Perform scanning on background thread
             await deepCleanScanner.startScan()
-            _ = await MainActor.run {
-                activeScans.remove(.deepClean)
+            
+            // Batch the final state update
+            _ = await uiUpdater.batch {
+                self.activeScans.remove(.deepClean)
             }
         }
     }
@@ -68,11 +92,18 @@ class ScanServiceManager: ObservableObject {
     /// 启动智能清理扫描（如果未在进行中）
     func startSmartCleanScanIfNeeded() {
         guard !smartCleanerService.isScanning else { return }
-        activeScans.insert(.smartClean)
         Task {
+            // Batch the initial state update
+            _ = await uiUpdater.batch {
+                self.activeScans.insert(.smartClean)
+            }
+            
+            // Perform scanning on background thread
             await smartCleanerService.scanAll()
-            _ = await MainActor.run {
-                activeScans.remove(.smartClean)
+            
+            // Batch the final state update
+            _ = await uiUpdater.batch {
+                self.activeScans.remove(.smartClean)
             }
         }
     }
@@ -80,11 +111,18 @@ class ScanServiceManager: ObservableObject {
     /// 启动重复文件扫描
     func startDuplicatesScan() {
         guard !smartCleanerService.isScanning else { return }
-        activeScans.insert(.duplicates)
         Task {
+            // Batch the initial state update
+            _ = await uiUpdater.batch {
+                self.activeScans.insert(.duplicates)
+            }
+            
+            // Perform scanning on background thread
             await smartCleanerService.scanDuplicates()
-            _ = await MainActor.run {
-                activeScans.remove(.duplicates)
+            
+            // Batch the final state update
+            _ = await uiUpdater.batch {
+                self.activeScans.remove(.duplicates)
             }
         }
     }
@@ -116,33 +154,33 @@ class ScanServiceManager: ObservableObject {
                 // 并行启动所有扫描
                 group.addTask {
                     if !self.junkCleaner.isScanning {
-                        _ = await MainActor.run { self.activeScans.insert(.junk) }
+                        _ = await self.uiUpdater.batch { self.activeScans.insert(.junk) }
                         await self.junkCleaner.scanJunk()
-                        _ = await MainActor.run { self.activeScans.remove(.junk) }
+                        _ = await self.uiUpdater.batch { self.activeScans.remove(.junk) }
                     }
                 }
                 
                 group.addTask {
                     if !self.largeFileScanner.isScanning {
-                        _ = await MainActor.run { self.activeScans.insert(.largeFiles) }
+                        _ = await self.uiUpdater.batch { self.activeScans.insert(.largeFiles) }
                         await self.largeFileScanner.scan()
-                        _ = await MainActor.run { self.activeScans.remove(.largeFiles) }
+                        _ = await self.uiUpdater.batch { self.activeScans.remove(.largeFiles) }
                     }
                 }
                 
                 group.addTask {
                     if !self.deepCleanScanner.isScanning {
-                        _ = await MainActor.run { self.activeScans.insert(.deepClean) }
+                        _ = await self.uiUpdater.batch { self.activeScans.insert(.deepClean) }
                         await self.deepCleanScanner.startScan()
-                        _ = await MainActor.run { self.activeScans.remove(.deepClean) }
+                        _ = await self.uiUpdater.batch { self.activeScans.remove(.deepClean) }
                     }
                 }
                 
                 group.addTask {
                     if !self.smartCleanerService.isScanning {
-                        _ = await MainActor.run { self.activeScans.insert(.smartClean) }
+                        _ = await self.uiUpdater.batch { self.activeScans.insert(.smartClean) }
                         await self.smartCleanerService.scanAll()
-                        _ = await MainActor.run { self.activeScans.remove(.smartClean) }
+                        _ = await self.uiUpdater.batch { self.activeScans.remove(.smartClean) }
                     }
                 }
             }

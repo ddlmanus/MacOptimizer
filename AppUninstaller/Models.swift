@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 
 // MARK: - 文件类型枚举
-enum FileType: String, CaseIterable, Identifiable {
+enum FileType: String, CaseIterable, Identifiable, Codable {
     case preferences = "偏好设置"
     case applicationSupport = "应用支持"
     case caches = "缓存"
@@ -105,17 +105,40 @@ class InstalledApp: Identifiable, ObservableObject, Hashable, @unchecked Sendabl
 }
 
 // MARK: - 残留文件模型
-class ResidualFile: Identifiable, ObservableObject, Hashable {
-    let id = UUID()
+class ResidualFile: Identifiable, ObservableObject, Hashable, Codable {
+    let id: UUID
     let path: URL
     let type: FileType
     let size: Int64
     @Published var isSelected: Bool = true
     
     init(path: URL, type: FileType, size: Int64) {
+        self.id = UUID()
         self.path = path
         self.type = type
         self.size = size
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, path, type, size, isSelected
+    }
+    
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.path = try container.decode(URL.self, forKey: .path)
+        self.type = try container.decode(FileType.self, forKey: .type)
+        self.size = try container.decode(Int64.self, forKey: .size)
+        self.isSelected = try container.decode(Bool.self, forKey: .isSelected)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(path, forKey: .path)
+        try container.encode(type, forKey: .type)
+        try container.encode(size, forKey: .size)
+        try container.encode(isSelected, forKey: .isSelected)
     }
     
     var formattedSize: String {

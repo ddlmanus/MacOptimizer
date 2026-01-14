@@ -269,7 +269,7 @@ struct ConsoleAppManagerView: View {
                         AppManagerRow(app: app, processService: processService, appScanner: appScanner, loc: loc)
                             .listRowBackground(Color.white.opacity(0.02))
                             .listRowSeparator(.hidden)
-                            .padding(.vertical, 4)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
                     }
                 }
                 .listStyle(.plain)
@@ -365,145 +365,162 @@ struct AppManagerRow: View {
     
     var body: some View {
         HStack {
-            Image(nsImage: installedApp.icon)
-                .resizable()
-                .frame(width: 32, height: 32)
-            
-            VStack(alignment: .leading) {
-                Text(installedApp.name)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                Text((loc.currentLanguage == .chinese ? "应用大小: " : "App Size: ") + installedApp.formattedSize)
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.6))
-            }
-            
+            appIconView
+            appInfoView
             Spacer()
-            
-            // Status
-            HStack {
-                if isRunningLocal {
-                    Circle().fill(Color.green).frame(width: 8, height: 8)
-                    Text(loc.currentLanguage == .chinese ? "运行中" : "Running")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                } else {
-                    Text(loc.currentLanguage == .chinese ? "未运行" : "Stopped")
-                        .font(.caption)
-                        .foregroundColor(.secondaryText)
-                }
-            }
-            .frame(width: 80, alignment: .leading)
-            
-            // Actions
-            HStack(spacing: 12) {
-                // Initialize / Reset -> Clean
-                Button(action: {
-                    showCleanConfirmation = true
-                }) {
-                    HStack(spacing: 4) {
-                        if isSpinning {
-                            ProgressView().scaleEffect(0.5).frame(width: 10, height: 10)
-                            Text(loc.currentLanguage == .chinese ? "清理中..." : "Cleaning...")
-                        } else if showSuccess {
-                            Image(systemName: "checkmark")
-                            Text(loc.currentLanguage == .chinese ? "完成" : "Done")
-                        } else {
-                            Image(systemName: "eraser")
-                            Text(loc.currentLanguage == .chinese ? "清理" : "Clean")
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(showSuccess ? Color.green.opacity(0.2) : Color.white.opacity(0.1))
-                    .foregroundColor(showSuccess ? .green : .white)
-                    .cornerRadius(6)
-                    .frame(width: 100)
-                }
-                .disabled(isSpinning)
-                .buttonStyle(.plain)
-                .help(loc.currentLanguage == .chinese ? "清理应用残留数据（不删除应用本身）" : "Clean app data (keeps app installed)")
-                .alert(isPresented: $showCleanConfirmation) {
-                    Alert(
-                        title: Text(loc.currentLanguage == .chinese ? "确认清理" : "Confirm Clean"),
-                        message: Text(loc.currentLanguage == .chinese ? "该操作将清理应用的所有缓存、日志和配置数据。\n应用本身（\(app.installedApp.formattedSize)）将被保留。" : "This will clean all cache, logs, and config data.\nThe app itself (\(app.installedApp.formattedSize)) will be kept."),
-                        primaryButton: .destructive(Text(loc.currentLanguage == .chinese ? "确认清理" : "Clean Data")) {
-                            Task {
-                                isSpinning = true
-                                showSuccess = false
-                                
-                                // Minimum 1s delay for visual feedback
-                                let startTime = Date()
-                                
-                                if isRunningLocal, let item = app.processItem {
-                                     await processService.cleanAppData(for: item)
-                                     withAnimation { isRunningLocal = false }
-                                } else {
-                                    // If stopped, manually scan and remove residuals
-                                    let scanner = ResidualFileScanner()
-                                    let files = await scanner.scanResidualFiles(for: app.installedApp)
-                                    
-                                     if !files.isEmpty {
-                                         for file in files { file.isSelected = true }
-                                         let appWithFiles = app.installedApp
-                                         appWithFiles.residualFiles = files
-                                         let remover = FileRemover()
-                                         _ = await remover.removeResidualFiles(of: appWithFiles, moveToTrash: true)
-                                     }
-                                }
-                                
-                                // Ensure spinner shows for at least a moment
-                                let elapsed = Date().timeIntervalSince(startTime)
-                                if elapsed < 0.8 {
-                                    try? await Task.sleep(nanoseconds: UInt64((0.8 - elapsed) * 1_000_000_000))
-                                }
-                                
-                                // 刷新应用大小
-                                await appScanner.refreshAppSize(for: app.installedApp)
-                                
-                                await MainActor.run {
-                                    isSpinning = false
-                                    showSuccess = true
-                                    
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                        showSuccess = false
-                                    }
-                                }
-                            }
-                        },
-                        secondaryButton: .cancel(Text(loc.currentLanguage == .chinese ? "取消" : "Cancel"))
-                    )
-                }
-                
-                // Force Quit
-                if isRunningLocal {
-                    Button(action: {
-                        if let item = app.processItem {
-                            processService.forceTerminateProcess(item)
-                            withAnimation { isRunningLocal = false }
-                        }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "xmark.octagon.fill")
-                            Text(loc.currentLanguage == .chinese ? "强制退出" : "Force Quit")
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.red.opacity(0.2))
-                        .foregroundColor(.red)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    // Placeholder
-                    Color.clear.frame(width: 90, height: 26)
-                }
-            }
-            .frame(width: 200, alignment: .trailing)
+            statusView
+            actionsView
         }
         .padding(12)
         .background(Color.white.opacity(0.05))
         .cornerRadius(8)
+    }
+    
+    private var appIconView: some View {
+        Image(nsImage: installedApp.icon)
+            .resizable()
+            .frame(width: 32, height: 32)
+    }
+    
+    private var appInfoView: some View {
+        VStack(alignment: .leading) {
+            Text(installedApp.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+            Text((loc.currentLanguage == .chinese ? "应用大小: " : "App Size: ") + installedApp.formattedSize)
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.6))
+        }
+    }
+    
+    private var statusView: some View {
+        HStack {
+            if isRunningLocal {
+                Circle().fill(Color.green).frame(width: 8, height: 8)
+                Text(loc.currentLanguage == .chinese ? "运行中" : "Running")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            } else {
+                Text(loc.currentLanguage == .chinese ? "未运行" : "Stopped")
+                    .font(.caption)
+                    .foregroundColor(.secondaryText)
+            }
+        }
+        .frame(width: 80, alignment: .leading)
+    }
+    
+    private var actionsView: some View {
+        HStack(spacing: 12) {
+            cleanButton
+            forceQuitButton
+        }
+        .frame(width: 200, alignment: .trailing)
+    }
+    
+    private var cleanButton: some View {
+        Button(action: {
+            showCleanConfirmation = true
+        }) {
+            HStack(spacing: 4) {
+                if isSpinning {
+                    ProgressView().scaleEffect(0.5).frame(width: 10, height: 10)
+                    Text(loc.currentLanguage == .chinese ? "清理中..." : "Cleaning...")
+                } else if showSuccess {
+                    Image(systemName: "checkmark")
+                    Text(loc.currentLanguage == .chinese ? "完成" : "Done")
+                } else {
+                    Image(systemName: "eraser")
+                    Text(loc.currentLanguage == .chinese ? "清理" : "Clean")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(showSuccess ? Color.green.opacity(0.2) : Color.white.opacity(0.1))
+            .foregroundColor(showSuccess ? .green : .white)
+            .cornerRadius(6)
+            .frame(width: 100)
+        }
+        .disabled(isSpinning)
+        .buttonStyle(.plain)
+        .help(loc.currentLanguage == .chinese ? "清理应用残留数据（不删除应用本身）" : "Clean app data (keeps app installed)")
+        .alert(isPresented: $showCleanConfirmation) {
+            Alert(
+                title: Text(loc.currentLanguage == .chinese ? "确认清理" : "Confirm Clean"),
+                message: Text(loc.currentLanguage == .chinese ? "该操作将清理应用的所有缓存、日志和配置数据。\n应用本身（\(app.installedApp.formattedSize)）将被保留。" : "This will clean all cache, logs, and config data.\nThe app itself (\(app.installedApp.formattedSize)) will be kept."),
+                primaryButton: .destructive(Text(loc.currentLanguage == .chinese ? "确认清理" : "Clean Data")) {
+                    Task {
+                        isSpinning = true
+                        showSuccess = false
+                        
+                        // Minimum 1s delay for visual feedback
+                        let startTime = Date()
+                        
+                        if isRunningLocal, let item = app.processItem {
+                             await processService.cleanAppData(for: item)
+                             withAnimation { isRunningLocal = false }
+                        } else {
+                            // If stopped, manually scan and remove residuals
+                            let scanner = ResidualFileScanner()
+                            let files = await scanner.scanResidualFiles(for: app.installedApp)
+                            
+                             if !files.isEmpty {
+                                 for file in files { file.isSelected = true }
+                                 let appWithFiles = app.installedApp
+                                 appWithFiles.residualFiles = files
+                                 let remover = FileRemover()
+                                 _ = await remover.removeResidualFiles(of: appWithFiles, moveToTrash: true)
+                             }
+                        }
+                        
+                        // Ensure spinner shows for at least a moment
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        if elapsed < 0.8 {
+                            try? await Task.sleep(nanoseconds: UInt64((0.8 - elapsed) * 1_000_000_000))
+                        }
+                        
+                        // 刷新应用大小
+                        await appScanner.refreshAppSize(for: app.installedApp)
+                        
+                        await MainActor.run {
+                            isSpinning = false
+                            showSuccess = true
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                showSuccess = false
+                            }
+                        }
+                    }
+                },
+                secondaryButton: .cancel(Text(loc.currentLanguage == .chinese ? "取消" : "Cancel"))
+            )
+        }
+    }
+    
+    private var forceQuitButton: some View {
+        Group {
+            if isRunningLocal {
+                Button(action: {
+                    if let item = app.processItem {
+                        processService.forceTerminateProcess(item)
+                        withAnimation { isRunningLocal = false }
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark.octagon.fill")
+                        Text(loc.currentLanguage == .chinese ? "强制退出" : "Force Quit")
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.2))
+                    .foregroundColor(.red)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            } else {
+                // Placeholder
+                Color.clear.frame(width: 90, height: 26)
+            }
+        }
     }
 }
 
@@ -1635,7 +1652,7 @@ struct ConsoleProtectionView: View {
                     // Statistics Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
                         // Downloads Monitored
-                        StatCard(
+                        MonitorStatCard(
                             title: loc.currentLanguage == .chinese ? "下载监控" : "Downloads",
                             value: "Active",
                             icon: "arrow.down.circle.fill",
@@ -1643,7 +1660,7 @@ struct ConsoleProtectionView: View {
                         )
                         
                         // Ads Blocked
-                        StatCard(
+                        MonitorStatCard(
                             title: loc.currentLanguage == .chinese ? "拦截广告" : "Ads Blocked",
                             value: "\(protectionService.adBlockedCount)",
                             icon: "hand.raised.fill",
@@ -1651,7 +1668,7 @@ struct ConsoleProtectionView: View {
                         )
                         
                         // Threats
-                        StatCard(
+                        MonitorStatCard(
                             title: loc.currentLanguage == .chinese ? "拦截威胁" : "Threats",
                             value: "\(protectionService.threatHistory.count)",
                             icon: "exclamationmark.shield.fill",
@@ -1791,7 +1808,7 @@ struct EmptyStateView: View {
     }
 }
 
-struct StatCard: View {
+struct MonitorStatCard: View {
     let title: String
     let value: String
     let icon: String

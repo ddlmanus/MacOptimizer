@@ -25,12 +25,16 @@ class ProcessService: ObservableObject {
     @Published var processes: [ProcessItem] = []
     @Published var isScanning = false
     
-    // 缓存 PID 到内存使用量的映射
+    // 缓存 PID 到内存使用量的映射 - 使用 Set 进行高效查找
     private var memoryCache: [Int32: Int64] = [:]
+    private var processIdSet: Set<Int32> = []
     
-    // Scan specific types
+    // UI Update Batching
+    private let uiUpdater = BatchedUIUpdater(debounceDelay: 0.05)
     func scanProcesses(showApps: Bool) async {
-        await MainActor.run { isScanning = true }
+        await uiUpdater.batch {
+            self.isScanning = true
+        }
         
         // 首先获取所有进程的内存使用量
         await fetchMemoryUsage()
@@ -116,8 +120,13 @@ class ProcessService: ObservableObject {
             return $0.name.localizedStandardCompare($1.name) == .orderedAscending 
         }
         
-        await MainActor.run {
+        // Update process ID set for efficient lookups
+        let pidSet = Set(sortedItems.map { $0.pid })
+        
+        // Batch UI update
+        await uiUpdater.batch {
             self.processes = sortedItems
+            self.processIdSet = pidSet
             self.isScanning = false
         }
     }
@@ -172,9 +181,12 @@ class ProcessService: ObservableObject {
             try? task.run()
         }
         
-        // Optimistic UI Removal
-        DispatchQueue.main.async {
-            self.processes.removeAll { $0.id == item.id }
+        // Batch UI removal
+        Task {
+            await uiUpdater.batch {
+                self.processes.removeAll { $0.id == item.id }
+                self.processIdSet.remove(item.pid)
+            }
         }
     }
 
@@ -186,9 +198,12 @@ class ProcessService: ObservableObject {
         task.arguments = ["-9", String(item.pid)]
         try? task.run()
         
-        // Optimistic UI Removal
-        DispatchQueue.main.async {
-            self.processes.removeAll { $0.id == item.id }
+        // Batch UI removal
+        Task {
+            await uiUpdater.batch {
+                self.processes.removeAll { $0.id == item.id }
+                self.processIdSet.remove(item.pid)
+            }
         }
     }
 

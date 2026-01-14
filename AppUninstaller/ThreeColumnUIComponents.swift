@@ -97,9 +97,15 @@ struct MainCategoryRow: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                        .font(.system(size: 12, weight: .semibold)) // Smaller font
-                        .foregroundColor(.white)
+                    if [.virus, .startupItems, .performanceApps, .appUpdates].contains(mainCategory) {
+                        Text("\(totalItems) " + (loc.currentLanguage == .chinese ? "个" : "items"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                    } else {
+                        Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
+                            .font(.system(size: 12, weight: .semibold)) // Smaller font
+                            .foregroundColor(.white)
+                    }
                 }
             }
             .contentShape(Rectangle())
@@ -164,9 +170,15 @@ struct SubCategoryRow: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
+                    if [.virus, .startupItems, .performanceApps, .appUpdates].contains(subcategory) {
+                        Text("\(fileCount) " + (loc.currentLanguage == .chinese ? "个" : "items"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                    } else {
+                        Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
                 }
             }
             .contentShape(Rectangle())

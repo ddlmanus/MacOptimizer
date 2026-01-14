@@ -64,15 +64,18 @@ class MenuBarManager: NSObject, ObservableObject {
         
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            // Try to load custom Application.icns
-            if let iconPath = Bundle.main.path(forResource: "Application", ofType: "icns"),
+            // Try to load AppIcon.icns for menu bar
+            if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
                let customIcon = NSImage(contentsOfFile: iconPath) {
                 customIcon.size = NSSize(width: 18, height: 18)
-                // 不设置 isTemplate，保持图标原始颜色
-                customIcon.isTemplate = false
+                // Use template rendering for proper menu bar appearance
+                customIcon.isTemplate = true
                 button.image = customIcon
             } else {
-                button.image = NSImage(systemSymbolName: "macpro.gen3", accessibilityDescription: "Mac优化大师")
+                // Fallback to SF Symbol
+                let fallbackIcon = NSImage(systemSymbolName: "macpro.gen3", accessibilityDescription: "Mac优化大师")
+                fallbackIcon?.isTemplate = true
+                button.image = fallbackIcon
             }
             
             button.action = #selector(toggleWindow)
@@ -346,5 +349,3 @@ extension MenuBarManager {
         }
     }
 }
-
-

@@ -152,10 +152,14 @@ struct MenuBarView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         
             if systemMonitor.showHighMemoryAlert {
-                MenuBarAlertView(systemMonitor: systemMonitor)
-                    .padding(.top, 60)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1)
+                MemoryAlertView(systemMonitor: systemMonitor, openAppAction: {
+                    manager.openMainApp()
+                })
+                    .padding(.top, 10) // Positioned below the icon roughly
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(100)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(Color.black.opacity(0.01)) // Catch clicks outside if needed, or just let it overlay
             }
         }
         .frame(width: 380)

@@ -38,6 +38,9 @@ class SystemMonitorService: ObservableObject {
     @Published var batteryState: String = "Unknown" 
     
     private var timer: Timer?
+    
+    // UI Update Batching
+    private let uiUpdater = BatchedUIUpdater(debounceDelay: 0.05)
 
     // Process Monitoring
     struct AppProcess: Identifiable {
@@ -268,8 +271,13 @@ class SystemMonitorService: ObservableObject {
                 // Normalize by core count approximately? Or just show raw. 
                 // Let's normalize by active core count to get 0-100% range typically expected by users.
                 let coreCount = Double(ProcessInfo.processInfo.activeProcessorCount)
-                DispatchQueue.main.async {
-                    self.cpuUsage = min((totalCPU / coreCount) / 100.0, 1.0)
+                let cpuUsageValue = min((totalCPU / coreCount) / 100.0, 1.0)
+                
+                // Batch CPU update
+                Task {
+                    await self.uiUpdater.batch {
+                        self.cpuUsage = cpuUsageValue
+                    }
                 }
             }
         } catch {
@@ -341,10 +349,17 @@ class SystemMonitorService: ObservableObject {
                 // App = Active + (Inactive - Pages Purgeable) roughly
                 // But for simplicity in UI matching, let's just use direct values for now.
                 
-                DispatchQueue.main.async {
-                    self.memoryUsage = Double(usedRAM) / Double(totalRAM)
-                    self.memoryUsedString = ByteCountFormatter.string(fromByteCount: Int64(usedRAM), countStyle: .memory)
-                    self.memoryTotalString = ByteCountFormatter.string(fromByteCount: Int64(totalRAM), countStyle: .memory)
+                let memoryUsageValue = Double(usedRAM) / Double(totalRAM)
+                let memoryUsedStringValue = ByteCountFormatter.string(fromByteCount: Int64(usedRAM), countStyle: .memory)
+                let memoryTotalStringValue = ByteCountFormatter.string(fromByteCount: Int64(totalRAM), countStyle: .memory)
+                
+                // Batch memory updates
+                Task {
+                    await self.uiUpdater.batch {
+                        self.memoryUsage = memoryUsageValue
+                        self.memoryUsedString = memoryUsedStringValue
+                        self.memoryTotalString = memoryTotalStringValue
+                    }
                 }
                 
                 // For detailed breakdown, use raw page counts
@@ -385,19 +400,25 @@ class SystemMonitorService: ObservableObject {
                         let downloadRate = downloadDelta / timeDiff
                         let uploadRate = uploadDelta / timeDiff
                         
-                        DispatchQueue.main.async {
-                            self.downloadSpeed = downloadRate
-                            self.uploadSpeed = uploadRate
-                            
-                            // Update Totals (Cumulative from netstat)
-                            self.totalDownload = ByteCountFormatter.string(fromByteCount: Int64(bytesIn), countStyle: .file)
-                            self.totalUpload = ByteCountFormatter.string(fromByteCount: Int64(bytesOut), countStyle: .file)
-                            
-                            // Update History
-                            self.downloadSpeedHistory.removeFirst()
-                            self.downloadSpeedHistory.append(downloadRate)
-                            self.uploadSpeedHistory.removeFirst()
-                            self.uploadSpeedHistory.append(uploadRate)
+                        let totalDownloadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesIn), countStyle: .file)
+                        let totalUploadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesOut), countStyle: .file)
+                        
+                        // Batch network updates
+                        Task {
+                            await self.uiUpdater.batch {
+                                self.downloadSpeed = downloadRate
+                                self.uploadSpeed = uploadRate
+                                
+                                // Update Totals (Cumulative from netstat)
+                                self.totalDownload = totalDownloadStr
+                                self.totalUpload = totalUploadStr
+                                
+                                // Update History
+                                self.downloadSpeedHistory.removeFirst()
+                                self.downloadSpeedHistory.append(downloadRate)
+                                self.uploadSpeedHistory.removeFirst()
+                                self.uploadSpeedHistory.append(uploadRate)
+                            }
                         }
                     }
                     
@@ -429,12 +450,16 @@ class SystemMonitorService: ObservableObject {
             try task.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
-                DispatchQueue.main.async {
-                    self.wifiSSID = output
+                Task {
+                    await uiUpdater.batch {
+                        self.wifiSSID = output
+                    }
                 }
             } else {
-                 DispatchQueue.main.async {
-                    self.wifiSSID = "Wi-Fi Not Connected"
+                 Task {
+                    await uiUpdater.batch {
+                        self.wifiSSID = "Wi-Fi Not Connected"
+                    }
                 }
             }
         } catch {
@@ -448,8 +473,12 @@ class SystemMonitorService: ObservableObject {
         let minutes = (Int(duration) % 3600) / 60
         let seconds = Int(duration) % 60
         
-        DispatchQueue.main.async {
-             self.connectionDuration = String(format: "%d小时 %d分钟 %d秒", hours, minutes, seconds)
+        let connectionDurationValue = String(format: "%d小时 %d分钟 %d秒", hours, minutes, seconds)
+        
+        Task {
+            await uiUpdater.batch {
+                self.connectionDuration = connectionDurationValue
+            }
         }
     }
     
@@ -475,27 +504,36 @@ class SystemMonitorService: ObservableObject {
                     let statusLine = lines[1]
                     
                     // Parse Percentage
+                    var batteryLevelValue: Double = 1.0
+                    var isChargingValue = false
+                    var batteryStateValue = "Unknown"
+                    
                     if let range = statusLine.range(of: "\\d+%", options: .regularExpression) {
                         let percentString = String(statusLine[range]).dropLast()
                         if let percent = Double(percentString) {
-                            DispatchQueue.main.async {
-                                self.batteryLevel = percent / 100.0
-                            }
+                            batteryLevelValue = percent / 100.0
                         }
                     }
                     
                     // Parse Charging State
-                    DispatchQueue.main.async {
-                        if output.contains("AC Power") {
-                            self.isCharging = true
-                            if statusLine.contains("charging") {
-                                self.batteryState = "正在充电"
-                            } else {
-                                self.batteryState = "已连接电源"
-                            }
+                    if output.contains("AC Power") {
+                        isChargingValue = true
+                        if statusLine.contains("charging") {
+                            batteryStateValue = "正在充电"
                         } else {
-                            self.isCharging = false
-                            self.batteryState = "使用电池"
+                            batteryStateValue = "已连接电源"
+                        }
+                    } else {
+                        isChargingValue = false
+                        batteryStateValue = "使用电池"
+                    }
+                    
+                    // Batch battery status update
+                    Task {
+                        await self.uiUpdater.batch {
+                            self.batteryLevel = batteryLevelValue
+                            self.isCharging = isChargingValue
+                            self.batteryState = batteryStateValue
                         }
                     }
                 }
@@ -550,20 +588,23 @@ class SystemMonitorService: ObservableObject {
                 }
                 
                 if maxRSS > 0 {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        // Only update if it's a new alert or different app
-                        if self.highMemoryApp?.id != maxPID {
-                            var appName = maxName
-                            var appIcon: NSImage?
-                            
-                            if let app = NSRunningApplication(processIdentifier: maxPID) {
-                                appName = app.localizedName ?? maxName
-                                appIcon = app.icon
+                    // Batch high memory app update
+                    Task {
+                        await self.uiUpdater.batch { [weak self] in
+                            guard let self = self else { return }
+                            // Only update if it's a new alert or different app
+                            if self.highMemoryApp?.id != maxPID {
+                                var appName = maxName
+                                var appIcon: NSImage?
+                                
+                                if let app = NSRunningApplication(processIdentifier: maxPID) {
+                                    appName = app.localizedName ?? maxName
+                                    appIcon = app.icon
+                                }
+                                
+                                self.highMemoryApp = HighMemoryApp(id: maxPID, name: appName, usage: maxRSS, icon: appIcon)
+                                self.showHighMemoryAlert = true
                             }
-                            
-                            self.highMemoryApp = HighMemoryApp(id: maxPID, name: appName, usage: maxRSS, icon: appIcon)
-                            self.showHighMemoryAlert = true
                         }
                     }
                 }
@@ -576,8 +617,13 @@ class SystemMonitorService: ObservableObject {
     func ignoreCurrentHighMemoryApp() {
         if let app = highMemoryApp {
             ignoredPids.insert(app.id)
-            highMemoryApp = nil
-            showHighMemoryAlert = false
+            
+            Task {
+                await uiUpdater.batch {
+                    self.highMemoryApp = nil
+                    self.showHighMemoryAlert = false
+                }
+            }
         }
     }
     
@@ -590,9 +636,14 @@ class SystemMonitorService: ObservableObject {
             // Add to ignore list so we don't alert again immediately if it takes time to close
             ignoredPids.insert(app.id)
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.highMemoryApp = nil
-                self?.showHighMemoryAlert = false
+            Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                
+                // Batch alert dismissal
+                await uiUpdater.batch {
+                    self.highMemoryApp = nil
+                    self.showHighMemoryAlert = false
+                }
             }
         } else if let app = highMemoryApp {
              // Fallback for non-app processes? kill command
@@ -602,8 +653,13 @@ class SystemMonitorService: ObservableObject {
              try? killTask.run()
              
              ignoredPids.insert(app.id)
-             highMemoryApp = nil
-             showHighMemoryAlert = false
+             
+             Task {
+                 await uiUpdater.batch {
+                     self.highMemoryApp = nil
+                     self.showHighMemoryAlert = false
+                 }
+             }
         }
     }
     
@@ -631,17 +687,26 @@ class SystemMonitorService: ObservableObject {
     
     // Add logic to updateStats
     private func updateDetailedStats(pagesActive: UInt64, pagesWired: UInt64, pagesCompressed: UInt64, pageSize: UInt64, totalRAM: UInt64) {
-        DispatchQueue.main.async {
-            self.memoryApp = Double(pagesActive * pageSize) / Double(totalRAM)
-            self.memoryWired = Double(pagesWired * pageSize) / Double(totalRAM)
-            self.memoryCompressed = Double(pagesCompressed * pageSize) / Double(totalRAM)
-            
-            // Uptime
-            var boottime = timeval()
-            var size = MemoryLayout<timeval>.stride
-            if sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 {
-                let bootDate = Date(timeIntervalSince1970: Double(boottime.tv_sec) + Double(boottime.tv_usec) / 1_000_000.0)
-                self.systemUptime = Date().timeIntervalSince(bootDate)
+        let memoryAppValue = Double(pagesActive * pageSize) / Double(totalRAM)
+        let memoryWiredValue = Double(pagesWired * pageSize) / Double(totalRAM)
+        let memoryCompressedValue = Double(pagesCompressed * pageSize) / Double(totalRAM)
+        
+        // Uptime
+        var boottime = timeval()
+        var size = MemoryLayout<timeval>.stride
+        var systemUptimeValue: TimeInterval = 0
+        if sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 {
+            let bootDate = Date(timeIntervalSince1970: Double(boottime.tv_sec) + Double(boottime.tv_usec) / 1_000_000.0)
+            systemUptimeValue = Date().timeIntervalSince(bootDate)
+        }
+        
+        // Batch detailed stats update
+        Task {
+            await self.uiUpdater.batch {
+                self.memoryApp = memoryAppValue
+                self.memoryWired = memoryWiredValue
+                self.memoryCompressed = memoryCompressedValue
+                self.systemUptime = systemUptimeValue
             }
         }
         
@@ -666,12 +731,13 @@ class SystemMonitorService: ObservableObject {
                     if let range = output.range(of: "\\d+%", options: .regularExpression) {
                         let percentString = String(output[range]).dropLast()
                         if let freePercent = Double(percentString) {
-                            DispatchQueue.main.async {
-                                // Pressure is inverse of free percentage in this context roughly,
-                                // or we can use the "inverted" value as pressure.
-                                // CleanMyMac pressure usually aligns with "Used" but let's assume
-                                // Pressure = 100 - Free% for now as a proxy if no better stat.
-                                self.memoryPressure = (100.0 - freePercent) / 100.0
+                            let memoryPressureValue = (100.0 - freePercent) / 100.0
+                            
+                            // Batch pressure update
+                            Task {
+                                await self.uiUpdater.batch {
+                                    self.memoryPressure = memoryPressureValue
+                                }
                             }
                         }
                     }
@@ -698,7 +764,6 @@ class SystemMonitorService: ObservableObject {
                     // vm.swapusage: total = 5120.00M  used = 4426.56M  free = 693.44M  (encrypted)
                     let components = output.components(separatedBy: " ")
                     var usedStr = ""
-//                    var totalStr = ""
                     
                     for (index, comp) in components.enumerated() {
                         if comp == "used" && index + 2 < components.count {
@@ -707,13 +772,12 @@ class SystemMonitorService: ObservableObject {
                         }
                     }
                     
-                    // Parse "4426.56M" to bytes for formatting if needed, but it comes with unit.
-                    // Let's re-format nicely.
-                    // Actually, let's keep it simple and just trim/clean.
-                    
-                    DispatchQueue.main.async {
-                         if !usedStr.isEmpty {
-                            self.memorySwapUsed = usedStr
+                    // Batch swap update
+                    if !usedStr.isEmpty {
+                        Task {
+                            await self.uiUpdater.batch {
+                                self.memorySwapUsed = usedStr
+                            }
                         }
                     }
                 }
@@ -759,10 +823,13 @@ class SystemMonitorService: ObservableObject {
                          }
                      }
                      
-                     DispatchQueue.main.async {
-                         self.batteryCycleCount = cycleCount
-                         self.batteryCondition = condition
-                         self.batteryHealth = "\(maxCapacity)%"
+                     // Batch battery details update
+                     Task {
+                         await self.uiUpdater.batch {
+                             self.batteryCycleCount = cycleCount
+                             self.batteryCondition = condition
+                             self.batteryHealth = "\(maxCapacity)%"
+                         }
                      }
                  }
              } catch {

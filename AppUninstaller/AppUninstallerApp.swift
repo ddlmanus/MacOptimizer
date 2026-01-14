@@ -12,8 +12,6 @@ struct AppUninstallerApp: App {
                 .frame(minWidth: 1100, minHeight: 750)
                 .preferredColorScheme(.dark)
                 .task {
-                    // Start Protection Service
-                    ProtectionService.shared.startMonitoring()
                     // Check for Updates
                     await UpdateCheckerService.shared.checkForUpdates()
                 }
