@@ -59,6 +59,7 @@ class LocalizationManager: ObservableObject {
         "largeFiles": [.chinese: "大文件查找", .english: "Large Files"],
         "fileExplorer": [.chinese: "文件管理", .english: "File Explorer"],
         "trash": [.chinese: "废纸篓", .english: "Trash"],
+        "shredder": [.chinese: "碎纸机", .english: "Shredder"],
         "privacy": [.chinese: "隐私保护", .english: "Privacy Protection"],
         "smartClean": [.chinese: "智能扫描", .english: "Smart Scan"],
         
@@ -71,6 +72,7 @@ class LocalizationManager: ObservableObject {
         "largeFiles_desc": [.chinese: "发现并清理占用空间的大文件", .english: "Find and clean large files"],
         "fileExplorer_desc": [.chinese: "浏览和管理磁盘文件", .english: "Browse and manage disk files"],
         "trash_desc": [.chinese: "查看并清空废纸篓", .english: "View and empty trash"],
+        "shredder_desc": [.chinese: "安全擦除敏感文件", .english: "Securely erase sensitive files"],
         
         // 通用
         "loading": [.chinese: "加载中...", .english: "Loading..."],
@@ -177,6 +179,26 @@ class LocalizationManager: ObservableObject {
         "including": [.chinese: "包括", .english: "Including"],
         "trash_on_mac": [.chinese: "mac 上的废纸篓", .english: "Trash on Mac"],
         "view_items": [.chinese: "查看项目", .english: "View Items"],
+        
+        // 碎纸机
+        "shredder_title": [.chinese: "碎纸机", .english: "File Shredder"],
+        "shredder_subtitle": [.chinese: "迅速擦除任何不需要的文件和文件夹而又不留一丝痕迹。", .english: "Quickly erase unwanted files and folders without leaving a trace."],
+        "secure_erase": [.chinese: "安全擦除敏感数据", .english: "Securely Erase Sensitive Data"],
+        "secure_erase_desc": [.chinese: "确保您擦除的文件不可通过安全擦除功能来恢复。", .english: "Ensure deleted files cannot be recovered with secure erase."],
+        "resolve_finder_errors": [.chinese: "解决各种访达错误", .english: "Resolve Finder Errors"],
+        "resolve_finder_errors_desc": [.chinese: "轻松移除被正在运行的进程锁定的项目，且不会出现任何访达错误。", .english: "Easily remove items locked by running processes without Finder errors."],
+        "select_files": [.chinese: "选择文件...", .english: "Select Files..."],
+        "restart": [.chinese: "重新开始", .english: "Restart"],
+        "assistant": [.chinese: "助手", .english: "Assistant"],
+        "shred": [.chinese: "轧碎", .english: "Shred"],
+        "remove_now": [.chinese: "立即移除", .english: "Remove Now"],
+        "cleaning_system": [.chinese: "正在清理系统...", .english: "Cleaning System..."],
+        "stop": [.chinese: "停止", .english: "Stop"],
+        "cleaning_complete": [.chinese: "清理完毕", .english: "Cleaning Complete"],
+        "cleaned": [.chinese: "已清理", .english: "Cleaned"],
+        "share_results": [.chinese: "分享成果", .english: "Share Results"],
+        "view_log": [.chinese: "查看日志", .english: "View Log"],
+        "free_space_available": [.chinese: "您现在启动磁盘中有 %.2f GB 可用空间。", .english: "You now have %.2f GB available on your startup disk."],
         
         // 确认对话框
         "confirm_delete": [.chinese: "确认删除", .english: "Confirm Delete"],

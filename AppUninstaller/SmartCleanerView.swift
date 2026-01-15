@@ -211,26 +211,6 @@ struct SmartCleanerView: View {
                 }
                 
                 Spacer()
-                
-                // Right Action - Assistant Button
-                Button(action: {
-                    // Placeholder for Assistant
-                }) {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 6, height: 6)
-                        
-                        Text(loc.currentLanguage == .chinese ? "助手" : "Assistant")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.15))
-                    .cornerRadius(12)
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 24)

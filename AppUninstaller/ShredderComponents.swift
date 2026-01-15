@@ -4,48 +4,93 @@ import AppKit
 // MARK: - 1. Landing View
 struct ShredderLandingView: View {
     @Binding var showFileImporter: Bool // Kept for signature compatibility if needed, but unused for logic now
+    @Environment(\.localization) var loc
     var selectFiles: () -> Void
     
     var body: some View {
-        HStack(spacing: 40) {
+        HStack(spacing: 60) {
             // Left Content
-            VStack(alignment: .leading, spacing: 32) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("碎纸机")
-                        .font(.system(size: 32, weight: .bold))
+            VStack(alignment: .leading, spacing: 30) {
+                // Branding Header (统一风格)
+                HStack(spacing: 8) {
+                    Text(loc.L("shredder_title"))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
                     
-                    Text("迅速擦除任何不需要的文件和文件夹而又不留一丝痕迹。")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                        .lineLimit(2)
+                    // Shredder Icon
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.badge.gearshape")
+                        Text(loc.currentLanguage == .chinese ? "安全擦除" : "Secure Erase")
+                            .font(.system(size: 20, weight: .heavy))
+                    }
+                    .foregroundColor(.white)
                 }
                 
+                Text(loc.L("shredder_subtitle"))
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                // Feature Rows (统一样式)
                 VStack(alignment: .leading, spacing: 24) {
-                    ShredderFeatureRow(icon: "lock.shield", title: "安全擦除敏感数据", description: "确保您擦除的文件不可通过安全擦除功能来恢复。")
-                    ShredderFeatureRow(icon: "exclamationmark.triangle", title: "解决各种“访达”错误", description: "轻松移除被正在运行的进程锁定的项目，且不会出现任何“访达”错误。")
+                    featureRow(
+                        icon: "lock.shield",
+                        title: loc.L("secure_erase"),
+                        subtitle: loc.L("secure_erase_desc")
+                    )
+                    
+                    featureRow(
+                        icon: "exclamationmark.triangle",
+                        title: loc.L("resolve_finder_errors"),
+                        subtitle: loc.L("resolve_finder_errors_desc")
+                    )
                 }
                 
+                // Action Button (统一颜色)
                 Button(action: { selectFiles() }) {
-                    Text("选择文件...")
-                        .font(.system(size: 14, weight: .semibold))
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.2))
-                        .foregroundColor(.white)
+                    Text(loc.L("select_files"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(hex: "4DDEE8")) // Teal - 与废纸篓统一
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 10)
             }
             .frame(maxWidth: 400)
             
-            Spacer()
-            
-            // Right Icon (Animated Placeholder)
-            ShredderIconView(isAnimating: false)
-                .frame(width: 300, height: 300)
+            // Right Icon (统一大小和阴影)
+            ZStack {
+                ShredderIconView(isAnimating: false)
+                    .frame(width: 320, height: 320)
+                    .shadow(color: Color.black.opacity(0.3), radius: 20, y: 10)
+            }
         }
         .padding(48)
+    }
+    
+    // 统一的 Feature Row 样式
+    private func featureRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(Color(hex: "4DDEE8"))
+                .frame(width: 28)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
@@ -53,6 +98,7 @@ struct ShredderLandingView: View {
 struct ShredderSelectionView: View {
     @ObservedObject var service: ShredderService
     @Binding var showFileImporter: Bool
+    @Environment(\.localization) var loc
     
     var body: some View {
         VStack(spacing: 0) {
@@ -61,7 +107,7 @@ struct ShredderSelectionView: View {
                 Button(action: { service.reset() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                        Text("重新开始")
+                        Text(loc.L("restart"))
                     }
                     .foregroundColor(.white.opacity(0.8))
                 }
@@ -69,13 +115,14 @@ struct ShredderSelectionView: View {
                 
                 Spacer()
                 
-                Text("碎纸机")
+                Text(loc.L("shredder_title"))
                     .foregroundColor(.white.opacity(0.6))
                     .font(.system(size: 13))
                 
                 Spacer()
                 
-                Helpers.AssistButton()
+                // 移除助手按钮（与智能扫描统一）
+                Color.clear.frame(width: 80)
             }
             .padding(16)
             
@@ -85,7 +132,7 @@ struct ShredderSelectionView: View {
                     ForEach(service.items) { item in
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 1.0)) // Cyan checkmark
+                                .foregroundColor(Color(hex: "4DDEE8")) // 统一颜色
                             
                             Image(nsImage: item.icon)
                                 .resizable()
@@ -115,11 +162,11 @@ struct ShredderSelectionView: View {
             // Bottom Action Bar
             HStack {
                 Menu {
-                    Button("立即移除") {
+                    Button(loc.L("remove_now")) {
                         Task { await service.startShredding() }
                     }
                 } label: {
-                    Text("立即移除")
+                    Text(loc.L("remove_now"))
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -141,7 +188,7 @@ struct ShredderSelectionView: View {
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
                         )
                     
-                    Text("轧碎")
+                    Text(loc.L("shred"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                     }
@@ -161,6 +208,7 @@ struct ShredderSelectionView: View {
 // MARK: - 3. Progress View
 struct ShreddingProgressView: View {
     @ObservedObject var service: ShredderService
+    @Environment(\.localization) var loc
     
     var body: some View {
         VStack {
@@ -171,7 +219,7 @@ struct ShreddingProgressView: View {
             
             Spacer()
             
-            Text("正在清理系统...")
+            Text(loc.L("cleaning_system"))
                 .font(.title)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
@@ -180,12 +228,11 @@ struct ShreddingProgressView: View {
             // Current Item
             if !service.currentItemName.isEmpty {
                 HStack {
-                    Image(systemName: "doc.fill") // Placeholder
+                    Image(systemName: "doc.fill")
                         .foregroundColor(.white)
                     Text(service.currentItemName)
                         .foregroundColor(.white)
                     Spacer()
-                    // Size?
                 }
                 .frame(maxWidth: 400)
                 .padding()
@@ -202,7 +249,7 @@ struct ShreddingProgressView: View {
                         .stroke(Color.green, lineWidth: 4)
                         .frame(width: 80, height: 80)
                     
-                    Text("停止")
+                    Text(loc.L("stop"))
                         .foregroundColor(.white)
                 }
             }
@@ -215,6 +262,7 @@ struct ShreddingProgressView: View {
 // MARK: - 4. Result View
 struct ShredderResultView: View {
     @ObservedObject var service: ShredderService
+    @Environment(\.localization) var loc
     
     var body: some View {
         HStack {
@@ -223,7 +271,7 @@ struct ShredderResultView: View {
                 .padding(.leading, 40)
             
             VStack(alignment: .leading, spacing: 16) {
-                Text("清理完毕")
+                Text(loc.L("cleaning_complete"))
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
                 
@@ -236,17 +284,17 @@ struct ShredderResultView: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("已清理")
+                    Text(loc.L("cleaned"))
                         .foregroundColor(.white.opacity(0.7))
                 }
                 
-                Text(String(format: "您现在启动磁盘中有 %.2f GB 可用空间。", Double(Helpers.getFreeDiskSpace()) / 1_000_000_000))
+                Text(String(format: loc.L("free_space_available"), Double(Helpers.getFreeDiskSpace()) / 1_000_000_000))
                     .foregroundColor(.white.opacity(0.7))
                 
                 Button(action: { /* Share? */ }) {
                     HStack {
                         Image(systemName: "square.and.arrow.up")
-                        Text("分享成果")
+                        Text(loc.L("share_results"))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -263,7 +311,7 @@ struct ShredderResultView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottomLeading) {
-            Button("查看日志") {
+            Button(loc.L("view_log")) {
                 // View log
             }
             .foregroundColor(.white.opacity(0.7))
@@ -274,7 +322,7 @@ struct ShredderResultView: View {
              Button(action: { service.reset() }) {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                    Text("重新开始")
+                    Text(loc.L("restart"))
                 }
                 .foregroundColor(.white.opacity(0.8))
             }
@@ -285,32 +333,6 @@ struct ShredderResultView: View {
 }
 
 // MARK: - Components
-
-struct ShredderFeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundColor(.white.opacity(0.8))
-                .frame(width: 32)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Text(description)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
 
 struct ShredderIconView: View {
     let isAnimating: Bool
@@ -399,23 +421,5 @@ struct Helpers {
              return attrs[.systemFreeSize] as? Int64 ?? 0
         }
         return 0
-    }
-    
-    struct AssistButton: View {
-        var body: some View {
-            Button(action: {}) {
-                HStack(spacing: 4) {
-                    Circle().fill(Color.white).frame(width: 6, height: 6)
-                    Text("助手")
-                        .font(.system(size: 12))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.black.opacity(0.3))
-                .foregroundColor(.white)
-                .cornerRadius(12)
-            }
-            .buttonStyle(.plain)
-        }
     }
 }

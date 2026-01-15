@@ -16,6 +16,7 @@ class MenuBarManager: NSObject, ObservableObject {
     var statusItem: NSStatusItem?
     var popoverWindow: MenuBarWindow?
     var detailWindow: MenuBarWindow?
+    var memoryAlertController: MemoryAlertWindowController?
     
     // Shared Source of Truth
     var systemMonitor = SystemMonitorService()
@@ -95,6 +96,12 @@ class MenuBarManager: NSObject, ObservableObject {
         let window = MenuBarWindow(contentViewController: hostingController)
         self.popoverWindow = window
         window.level = .floating
+        
+        // 初始化内存警告控制器
+        memoryAlertController = MemoryAlertWindowController(
+            systemMonitor: systemMonitor,
+            statusBarButton: statusItem?.button
+        )
     }
     
     @objc func toggleWindow() {

@@ -22,6 +22,11 @@ class SystemMonitorService: ObservableObject {
     private let memoryThresholdGB: Double = 1.0 
     private var ignoredPids: Set<pid_t> = []
     
+    // 新增：定时提醒和永久忽略
+    private var snoozedUntil: Date?  // 暂停提醒直到此时间
+    private var permanentlyIgnoredApps: Set<String> = []  // 永久忽略的应用名称列表
+    private let ignoredAppsKey = "MemoryMonitor.IgnoredApps"
+    
     // Network Speed Monitoring
     @Published var downloadSpeed: Double = 0.0 // bytes per second
     @Published var uploadSpeed: Double = 0.0   // bytes per second
@@ -218,7 +223,20 @@ class SystemMonitorService: ObservableObject {
     // ... add fetchUserProcesses() to updateStats ...
     
     init() {
+        loadIgnoredApps()
         startMonitoring()
+    }
+    
+    /// 从UserDefaults加载永久忽略的应用列表
+    private func loadIgnoredApps() {
+        if let savedApps = UserDefaults.standard.array(forKey: ignoredAppsKey) as? [String] {
+            permanentlyIgnoredApps = Set(savedApps)
+        }
+    }
+    
+    /// 保存永久忽略的应用列表到UserDefaults
+    private func saveIgnoredApps() {
+        UserDefaults.standard.set(Array(permanentlyIgnoredApps), forKey: ignoredAppsKey)
     }
     
     func startMonitoring() {
@@ -545,6 +563,11 @@ class SystemMonitorService: ObservableObject {
     
 
     func checkHighMemoryApps() {
+        // 检查是否在暂停期间
+        if let snoozedUntil = snoozedUntil, Date() < snoozedUntil {
+            return  // 暂停期间不检测
+        }
+        
         // Use ps to get pid and rss
         let task = Process()
         task.launchPath = "/bin/bash"
@@ -573,15 +596,25 @@ class SystemMonitorService: ObservableObject {
                             // Check ignore list and self
                             if pid == ProcessInfo.processInfo.processIdentifier { continue }
                             if ignoredPids.contains(pid) { continue }
+                            
+                            // 获取应用名称用于检查永久忽略列表
+                            let tempName = parts[2...].joined(separator: " ")
+                            var appName = tempName
+                            if let app = NSRunningApplication(processIdentifier: pid) {
+                                appName = app.localizedName ?? tempName
+                            }
+                            
+                            // 检查是否在永久忽略列表中
+                            if permanentlyIgnoredApps.contains(appName) {
+                                continue
+                            }
                                                         
                             let rssGB = rssKB / 1024.0 / 1024.0
                             
                             if rssGB > memoryThresholdGB && rssGB > maxRSS {
                                 maxRSS = rssGB
                                 maxPID = pid
-                                // Comm might be truncated or just the binary name.
-                                // Use NSRunningApplication for better name/icon if possible.
-                                maxName = parts[2...].joined(separator: " ") 
+                                maxName = appName
                             }
                         }
                     }
@@ -594,15 +627,13 @@ class SystemMonitorService: ObservableObject {
                             guard let self = self else { return }
                             // Only update if it's a new alert or different app
                             if self.highMemoryApp?.id != maxPID {
-                                var appName = maxName
                                 var appIcon: NSImage?
                                 
                                 if let app = NSRunningApplication(processIdentifier: maxPID) {
-                                    appName = app.localizedName ?? maxName
                                     appIcon = app.icon
                                 }
                                 
-                                self.highMemoryApp = HighMemoryApp(id: maxPID, name: appName, usage: maxRSS, icon: appIcon)
+                                self.highMemoryApp = HighMemoryApp(id: maxPID, name: maxName, usage: maxRSS, icon: appIcon)
                                 self.showHighMemoryAlert = true
                             }
                         }
@@ -625,6 +656,59 @@ class SystemMonitorService: ObservableObject {
                 }
             }
         }
+    }
+    
+    /// 暂停内存警告一段时间（定时提醒）
+    /// - Parameter minutes: 暂停的分钟数
+    func snoozeAlert(minutes: Int) {
+        snoozedUntil = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        
+        // 暂时关闭当前警告
+        Task {
+            await uiUpdater.batch {
+                self.highMemoryApp = nil
+                self.showHighMemoryAlert = false
+            }
+        }
+        
+        print("[MemoryMonitor] Snoozed for \(minutes) minutes until \(snoozedUntil!)")
+    }
+    
+    /// 永久忽略当前高内存应用
+    func ignoreAppPermanently() {
+        guard let app = highMemoryApp else { return }
+        
+        // 添加到永久忽略列表
+        permanentlyIgnoredApps.insert(app.name)
+        saveIgnoredApps()
+        
+        // 关闭警告
+        Task {
+            await uiUpdater.batch {
+                self.highMemoryApp = nil
+                self.showHighMemoryAlert = false
+            }
+        }
+        
+        print("[MemoryMonitor] Permanently ignored app: \(app.name)")
+    }
+    
+    /// 移除永久忽略的应用（用于设置界面）
+    /// - Parameter appName: 应用名称
+    func removeFromIgnoredApps(_ appName: String) {
+        permanentlyIgnoredApps.remove(appName)
+        saveIgnoredApps()
+    }
+    
+    /// 获取所有永久忽略的应用列表
+    func getIgnoredApps() -> [String] {
+        return Array(permanentlyIgnoredApps).sorted()
+    }
+    
+    /// 清除所有永久忽略的应用
+    func clearAllIgnoredApps() {
+        permanentlyIgnoredApps.removeAll()
+        saveIgnoredApps()
     }
     
     func terminateHighMemoryApp() {
