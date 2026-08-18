@@ -517,16 +517,24 @@ struct UninstallerReplicaView: View {
         guard !isLoadingRelatedFiles else { return }
         isLoadingRelatedFiles = true
 
-        for app in appScanner.apps where app.residualFiles.isEmpty {
-            await appScanner.scanResidualFiles(for: app)
-        }
+        Task.detached(priority: .utility) {
+            let scanner = DeepCleanScanner()
+            let rawLeftovers = await scanner.scanUninstallerResiduals()
 
-        let scanner = DeepCleanScanner()
-        leftovers = await scanner.scanUninstallerResiduals()
-            .filter(isTrueLeftover)
-            .filter { ScanResultIgnoreStore.shouldInclude($0.url) }
-        selectedLeftoverIDs.subtract(leftovers.map(\.id))
-        isLoadingRelatedFiles = false
+            await MainActor.run {
+                for app in self.appScanner.apps where app.residualFiles.isEmpty {
+                    Task {
+                        await self.appScanner.scanResidualFiles(for: app)
+                    }
+                }
+                let filteredLeftovers = rawLeftovers
+                    .filter(self.isTrueLeftover)
+                    .filter { ScanResultIgnoreStore.shouldInclude($0.url) }
+                self.leftovers = filteredLeftovers
+                self.selectedLeftoverIDs.subtract(filteredLeftovers.map(\.id))
+                self.isLoadingRelatedFiles = false
+            }
+        }
     }
 
     private func isTrueLeftover(_ item: DeepCleanItem) -> Bool {

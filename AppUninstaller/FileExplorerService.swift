@@ -12,6 +12,7 @@ struct ExplorerFileItem: Identifiable, Hashable {
     let modificationDate: Date?
     let creationDate: Date?
     let isHidden: Bool
+    let icon: NSImage
     
     var formattedSize: String {
         if isDirectory { return "--" }
@@ -28,10 +29,6 @@ struct ExplorerFileItem: Identifiable, Hashable {
     
     var fileExtension: String {
         url.pathExtension.lowercased()
-    }
-    
-    var icon: NSImage {
-        NSWorkspace.shared.icon(forFile: url.path)
     }
     
     func hash(into hasher: inout Hasher) {
@@ -102,6 +99,7 @@ class FileExplorerService: ObservableObject {
                 
                 for itemURL in contents {
                     let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .creationDateKey, .isHiddenKey])
+                    let itemIcon = NSWorkspace.shared.icon(forFile: itemURL.path)
                     
                     let item = ExplorerFileItem(
                         url: itemURL,
@@ -110,7 +108,8 @@ class FileExplorerService: ObservableObject {
                         size: Int64(resourceValues.fileSize ?? 0),
                         modificationDate: resourceValues.contentModificationDate,
                         creationDate: resourceValues.creationDate,
-                        isHidden: resourceValues.isHidden ?? false
+                        isHidden: resourceValues.isHidden ?? false,
+                        icon: itemIcon
                     )
                     loadedItems.append(item)
                 }
