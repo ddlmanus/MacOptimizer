@@ -253,105 +253,112 @@ class OptimizerService: ObservableObject {
         try? await Task.sleep(nanoseconds: 500_000_000)
     }
     
-    @MainActor
-    private func fetchHeavyConsumers() {
-        // Run ps command to get top CPU consumers
-        // ps -Aceo pid,%cpu,comm -r | head -n 10
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "ps -Aceo pid,%cpu,comm -r | head -n 15"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.launch()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8) {
-            var items: [OptimizerProcessItem] = []
-            let lines = output.components(separatedBy: .newlines).dropFirst() // Skip header
-            
-            for line in lines {
-                let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                if parts.count >= 3, let pid = Int32(parts[0]), let cpu = Double(parts[1]) {
-                    if cpu > 1.0 { // Filter apps using > 1% CPU (simulated threshold for "Heavy")
-                         // Get app name and icon
-                        if let app = NSRunningApplication(processIdentifier: pid) {
-                            // Exclude self
-                            if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue }
-                            
-                            // Only show apps with icons (user visible)
-                            if let icon = app.icon, let name = app.localizedName {
-                                items.append(OptimizerProcessItem(id: pid, name: name, icon: icon, usageDescription: String(format: "%.1f%% CPU", cpu)))
+    private func fetchHeavyConsumers() async {
+        await Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.launchPath = "/bin/bash"
+            task.arguments = ["-c", "ps -Aceo pid,%cpu,comm -r | head -n 15"]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            do {
+                try task.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+                if let output = String(data: data, encoding: .utf8) {
+                    var items: [OptimizerProcessItem] = []
+                    let lines = output.components(separatedBy: .newlines).dropFirst() // Skip header
+
+                    for line in lines {
+                        let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                        if parts.count >= 3, let pid = Int32(parts[0]), let cpu = Double(parts[1]) {
+                            if cpu > 1.0 { // Filter apps using > 1% CPU (simulated threshold for "Heavy")
+                                if let app = NSRunningApplication(processIdentifier: pid) {
+                                    if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue }
+                                    if let icon = app.icon, let name = app.localizedName {
+                                        items.append(OptimizerProcessItem(id: pid, name: name, icon: icon, usageDescription: String(format: "%.1f%% CPU", cpu)))
+                                    }
+                                }
                             }
                         }
                     }
+                    let finalItems = items
+                    await MainActor.run {
+                        self.heavyProcesses = finalItems
+                    }
+                }
+            } catch {
+                print("fetchHeavyConsumers error: \(error)")
+            }
+        }.value
+    }
+
+    private func fetchLaunchAgents() async {
+        await Task.detached(priority: .userInitiated) {
+            var items: [LaunchAgentItem] = []
+            let paths = [
+                FileManager.default.homeDirectoryForCurrentUser.path + "/Library/LaunchAgents",
+                "/Library/LaunchAgents"
+            ]
+
+            for path in paths {
+                if let files = try? FileManager.default.contentsOfDirectory(atPath: path) {
+                    for file in files where file.hasSuffix(".plist") {
+                        let fullPath = path + "/" + file
+                        let name = file.replacingOccurrences(of: ".plist", with: "")
+                        let icon = NSWorkspace.shared.icon(for: UTType(filenameExtension: "plist") ?? .propertyList)
+                        items.append(LaunchAgentItem(
+                            path: fullPath,
+                            name: name,
+                            label: name,
+                            icon: icon,
+                            isEnabled: true
+                        ))
+                    }
                 }
             }
-            self.heavyProcesses = items
-        }
-    }
-    
-    @MainActor
-    private func fetchLaunchAgents() {
-        var items: [LaunchAgentItem] = []
-        let paths = [
-            FileManager.default.homeDirectoryForCurrentUser.path + "/Library/LaunchAgents",
-            "/Library/LaunchAgents"
-        ]
-        
-        for path in paths {
-            if let files = try? FileManager.default.contentsOfDirectory(atPath: path) {
-                for file in files where file.hasSuffix(".plist") {
-                    let fullPath = path + "/" + file
-                    // Simplified: Use filename as name, generic icon
-                    let name = file.replacingOccurrences(of: ".plist", with: "")
-                    // Check if loaded? roughly assume enabled if file exists for now, 
-                    // real check involves `launchctl list`
-                    
-                    // Simple logic: existing plist = enabled (unless disabled in override database, which is complex)
-                    // We will just list them.
-                    items.append(LaunchAgentItem(
-                        path: fullPath,
-                        name: name,
-                        label: name,
-                        icon: NSWorkspace.shared.icon(for: UTType(filenameExtension: "plist") ?? .propertyList),
-                        isEnabled: true
-                    ))
-                }
+            let finalItems = items
+            await MainActor.run {
+                self.launchAgents = finalItems
             }
-        }
-        self.launchAgents = items
+        }.value
     }
-    
-    @MainActor
-    private func fetchHungApps() {
-        // Detect apps in Uninterruptible sleep (U) or Zombie (Z) state
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "ps -Aceo pid,state,comm | grep -e 'U' -e 'Z'"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.launch()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8) {
-             var items: [OptimizerProcessItem] = []
-             let lines = output.components(separatedBy: .newlines)
-             for line in lines {
-                 let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                 if parts.count >= 3, let pid = Int32(parts[0]) {
-                     // Check if it's a gui app
-                     if let app = NSRunningApplication(processIdentifier: pid), let icon = app.icon, let name = app.localizedName {
-                         if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue } // Exclude self
-                         let state = parts[1]
-                         let desc = state.contains("Z") ? "Zombie" : "Unresponsive"
-                         items.append(OptimizerProcessItem(id: pid, name: name, icon: icon, usageDescription: desc))
-                     }
-                 }
-             }
-             self.hungApps = items
-        }
+
+    private func fetchHungApps() async {
+        await Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.launchPath = "/bin/bash"
+            task.arguments = ["-c", "ps -Aceo pid,state,comm | grep -e 'U' -e 'Z'"]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            do {
+                try task.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+                if let output = String(data: data, encoding: .utf8) {
+                    var items: [OptimizerProcessItem] = []
+                    let lines = output.components(separatedBy: .newlines)
+                    for line in lines {
+                        let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                        if parts.count >= 3, let pid = Int32(parts[0]) {
+                            if let app = NSRunningApplication(processIdentifier: pid), let icon = app.icon, let name = app.localizedName {
+                                if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue }
+                                let state = parts[1]
+                                let desc = state.contains("Z") ? "Zombie" : "Unresponsive"
+                                items.append(OptimizerProcessItem(id: pid, name: name, icon: icon, usageDescription: desc))
+                            }
+                        }
+                    }
+                    let finalItems = items
+                    await MainActor.run {
+                        self.hungApps = finalItems
+                    }
+                }
+            } catch {
+                print("fetchHungApps error: \(error)")
+            }
+        }.value
     }
     
     // MARK: - 清理任务执行
@@ -483,62 +490,55 @@ class OptimizerService: ObservableObject {
     }
     
     // 扫描启动代理
-    @MainActor
-    private func scanBootAgents() {
-        bootAgentsToDisable.removeAll()
-        
-        let userAgentsPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents")
-        
-        // 安全白名单 - 这些不应该被禁用
-        let safeAgents = ["com.apple.", "homebrew.", "com.github."]
-        
-        // 已知的可以安全禁用的常见启动代理（通常是自动更新程序）
-        let knownNonEssential = [
-            "update", "updater", "helper", "assistant", "agent",
-            "sync", "backup", "cloud", "autoupdate"
-        ]
-        
-        guard let agents = try? FileManager.default.contentsOfDirectory(atPath: userAgentsPath.path) else {
-            return
-        }
-        
-        for agent in agents where agent.hasSuffix(".plist") {
-            let agentLower = agent.lowercased()
-            
-            // 跳过白名单中的代理
-            if safeAgents.contains(where: { agentLower.contains($0) }) {
-                continue
+    private func scanBootAgents() async {
+        await Task.detached(priority: .userInitiated) {
+            var items: [LaunchAgentItem] = []
+            let userAgentsPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents")
+            let safeAgents = ["com.apple.", "homebrew.", "com.github."]
+            let knownNonEssential = [
+                "update", "updater", "helper", "assistant", "agent",
+                "sync", "backup", "cloud", "autoupdate"
+            ]
+
+            guard let agents = try? FileManager.default.contentsOfDirectory(atPath: userAgentsPath.path) else {
+                return
             }
-            
-            // 检查是否是已知的非必需启动项
-            let isNonEssential = knownNonEssential.contains { agentLower.contains($0) }
-            
-            let agentPath = userAgentsPath.appendingPathComponent(agent)
-            let name = agent.replacingOccurrences(of: ".plist", with: "")
-            
-            // 尝试从 plist 中读取 Label
-            var label = name
-            if let plistData = try? Data(contentsOf: agentPath),
-               let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
-               let plistLabel = plist["Label"] as? String {
-                label = plistLabel
+
+            for agent in agents where agent.hasSuffix(".plist") {
+                let agentLower = agent.lowercased()
+                if safeAgents.contains(where: { agentLower.contains($0) }) {
+                    continue
+                }
+
+                let isNonEssential = knownNonEssential.contains { agentLower.contains($0) }
+                let agentPath = userAgentsPath.appendingPathComponent(agent)
+                let name = agent.replacingOccurrences(of: ".plist", with: "")
+
+                var label = name
+                if let plistData = try? Data(contentsOf: agentPath),
+                   let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
+                   let plistLabel = plist["Label"] as? String {
+                    label = plistLabel
+                }
+
+                let isEnabled = agent.hasSuffix(".plist")
+
+                items.append(LaunchAgentItem(
+                    path: agentPath.path,
+                    name: name,
+                    label: label,
+                    icon: NSWorkspace.shared.icon(for: .propertyList),
+                    isEnabled: isEnabled,
+                    isSelected: isNonEssential
+                ))
             }
-            
-            // 检查是否已启用
-            let isEnabled = agent.hasSuffix(".plist") // 简化判断
-            
-            bootAgentsToDisable.append(LaunchAgentItem(
-                path: agentPath.path,
-                name: name,
-                label: label,
-                icon: NSWorkspace.shared.icon(for: .propertyList),
-                isEnabled: isEnabled,
-                isSelected: isNonEssential // 默认选中非必需项
-            ))
-        }
-        
-        // 按名称排序
-        bootAgentsToDisable.sort { $0.name < $1.name }
+
+            items.sort { $0.name < $1.name }
+            let finalItems = items
+            await MainActor.run {
+                self.bootAgentsToDisable = finalItems
+            }
+        }.value
     }
     
     // 禁用选中的启动代理
@@ -609,67 +609,69 @@ class OptimizerService: ObservableObject {
     }
     
     // 检测高内存应用
-    @MainActor
-    private func detectHighMemoryApps() {
-        highMemoryApps.removeAll()
-        
-        // 使用 ps 命令获取所有进程的内存使用情况
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "ps -Aceo pid,rss,comm | awk '$2 > 500000 {print $1,$2,$3}'"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        try? task.run()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        
-        if let output = String(data: data, encoding: .utf8) {
-            let lines = output.components(separatedBy: .newlines).filter { !$0.isEmpty }
-            
-            for line in lines {
-                let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                if parts.count >= 2, let pid = Int32(parts[0]), let rss = Double(parts[1]) {
-                    // 获取应用信息
-                    if let app = NSRunningApplication(processIdentifier: pid) {
-                        // 排除当前应用
-                        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue }
-                        
-                        // 排除系统关键应用
-                        if let bundleId = app.bundleIdentifier {
-                            let systemApps = ["com.apple.finder", "com.apple.dock", "com.apple.SystemUIServer", "com.apple.WindowServer"]
-                            if systemApps.contains(bundleId) { continue }
-                        }
-                        
-                        // 只显示有图标的 GUI 应用
-                        if let icon = app.icon, let name = app.localizedName {
-                            let memoryMB = rss / 1024.0
-                            let memoryGB = memoryMB / 1024.0
-                            highMemoryApps.append(OptimizerProcessItem(
-                                id: pid,
-                                name: name,
-                                icon: icon,
-                                usageDescription: memoryGB >= 1.0 ? String(format: "%.1f GB", memoryGB) : String(format: "%.0f MB", memoryMB)
-                            ))
+    private func detectHighMemoryApps() async {
+        await Task.detached(priority: .userInitiated) {
+            var detectedApps: [OptimizerProcessItem] = []
+
+            let task = Process()
+            task.launchPath = "/bin/bash"
+            task.arguments = ["-c", "ps -Aceo pid,rss,comm | awk '$2 > 500000 {print $1,$2,$3}'"]
+
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            do {
+                try task.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+
+                if let output = String(data: data, encoding: .utf8) {
+                    let lines = output.components(separatedBy: .newlines).filter { !$0.isEmpty }
+
+                    for line in lines {
+                        let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                        if parts.count >= 2, let pid = Int32(parts[0]), let rss = Double(parts[1]) {
+                            if let app = NSRunningApplication(processIdentifier: pid) {
+                                if app.processIdentifier == ProcessInfo.processInfo.processIdentifier { continue }
+
+                                if let bundleId = app.bundleIdentifier {
+                                    let systemApps = ["com.apple.finder", "com.apple.dock", "com.apple.SystemUIServer", "com.apple.WindowServer"]
+                                    if systemApps.contains(bundleId) { continue }
+                                }
+
+                                if let icon = app.icon, let name = app.localizedName {
+                                    let memoryMB = rss / 1024.0
+                                    let memoryGB = memoryMB / 1024.0
+                                    detectedApps.append(OptimizerProcessItem(
+                                        id: pid,
+                                        name: name,
+                                        icon: icon,
+                                        usageDescription: memoryGB >= 1.0 ? String(format: "%.1f GB", memoryGB) : String(format: "%.0f MB", memoryMB)
+                                    ))
+                                }
+                            }
                         }
                     }
                 }
+            } catch {
+                print("detectHighMemoryApps error: \(error)")
             }
-        }
-        
-        // 按内存使用量排序
-        highMemoryApps.sort { app1, app2 in
-            // 提取内存值进行比较
-            let getValue: (String) -> Double = { usage in
-                let components = usage.components(separatedBy: .whitespaces)
-                if let value = Double(components[0]) {
-                    return components.last?.contains("GB") == true ? value * 1024 : value
+
+            detectedApps.sort { app1, app2 in
+                let getValue: (String) -> Double = { usage in
+                    let components = usage.components(separatedBy: .whitespaces)
+                    if let value = Double(components[0]) {
+                        return components.last?.contains("GB") == true ? value * 1024 : value
+                    }
+                    return 0
                 }
-                return 0
+                return getValue(app1.usageDescription) > getValue(app2.usageDescription)
             }
-            return getValue(app1.usageDescription) > getValue(app2.usageDescription)
-        }
+
+            let finalApps = detectedApps
+            await MainActor.run {
+                self.highMemoryApps = finalApps
+            }
+        }.value
     }
     
     // 终止选中的高内存应用

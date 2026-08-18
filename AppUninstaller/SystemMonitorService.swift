@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import AppKit
+import Darwin
+import IOKit.ps
+import CoreWLAN
 
 struct HighMemoryApp: Identifiable {
     let id: pid_t
@@ -51,6 +54,9 @@ class SystemMonitorService: ObservableObject {
     private var isUpdateInFlight = false
     private var updateCycle = 0
     
+    private var prevCpuLoadInfo = host_cpu_load_info()
+    private var hasPrevCpu = false
+
     // UI Update Batching
     private let uiUpdater = BatchedUIUpdater(debounceDelay: 0.05)
 
@@ -91,8 +97,8 @@ class SystemMonitorService: ObservableObject {
         // 2. Scan ALL user processes to build a process tree
         // ps -x -o pid,ppid,%cpu,rss,comm
         let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "ps -x -o pid,ppid,%cpu,rss,comm | tail -n +2"]
+        task.executableURL = URL(fileURLWithPath: "/bin/ps")
+        task.arguments = ["-x", "-o", "pid,ppid,%cpu,rss,comm"]
         
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -100,6 +106,7 @@ class SystemMonitorService: ObservableObject {
         do {
             try task.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
             if let output = String(data: data, encoding: .utf8) {
                 // Parse all processes
                 struct ProcessInfo {
@@ -114,7 +121,7 @@ class SystemMonitorService: ObservableObject {
                 var childrenMap: [Int32: [Int32]] = [:] // Parent -> [Children]
                 
                 let lines = output.components(separatedBy: "\n")
-                for line in lines {
+                for line in lines.dropFirst() {
                     let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                     if parts.count >= 5,
                        let pid = Int32(parts[0]),
@@ -308,194 +315,75 @@ class SystemMonitorService: ObservableObject {
             fetchUserProcesses()
         }
         
-        // CPU Usage (Simplified using top for now to avoid complex Mach calls issues in pure Swift script context initially, 
-        // but robust implementation would use host_processor_info. Let's try to parse top -l 1 output specifically designed for machine reading if possible, 
-        // or just standard parsing.)
-        // Actually, let's use a simpler bash command approach which is safer/easier to debug in this agent environment.
-        // `ps -A -o %cpu | awk '{s+=$1} END {print s}'` gives total CPU usage sum (can be > 100% on multi-core).
-        
-        let cpuTask = Process()
-        cpuTask.launchPath = "/bin/bash"
-        cpuTask.arguments = ["-c", "ps -A -o %cpu | awk '{s+=$1} END {print s}'"]
-        
-        let pipe = Pipe()
-        cpuTask.standardOutput = pipe
-        
-        do {
-            try cpuTask.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               let totalCPU = Double(output) {
-                // Normalize by core count approximately? Or just show raw. 
-                // Let's normalize by active core count to get 0-100% range typically expected by users.
-                let coreCount = Double(ProcessInfo.processInfo.activeProcessorCount)
-                let cpuUsageValue = min((totalCPU / coreCount) / 100.0, 1.0)
-                
-                // Batch CPU update
-                Task {
-                    await self.uiUpdater.batch {
-                        self.cpuUsage = cpuUsageValue
-                    }
+        // 1. CPU Usage using native Mach host_statistics (0 child processes)
+        if let cpuUsageValue = getNativeCpuUsage() {
+            Task {
+                await self.uiUpdater.batch {
+                    self.cpuUsage = cpuUsageValue
                 }
             }
-        } catch {
-            print("CPU Scan Error: \(error)")
         }
-        
-        // Memory Usage
-        // Uses `vm_stat`
-        let memTask = Process()
-        memTask.launchPath = "/usr/bin/vm_stat"
-        
-        let memPipe = Pipe()
-        memTask.standardOutput = memPipe
-        
-        do {
-            try memTask.run()
-            let data = memPipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                let lines = output.components(separatedBy: "\n")
-                var pageSize: UInt64 = 16384 // Apple Silicon default
-                var pagesActive: UInt64 = 0
-                var pagesInactive: UInt64 = 0
-                var pagesSpeculative: UInt64 = 0
-                var pagesWired: UInt64 = 0
-                var pagesCompressed: UInt64 = 0 // Pages occupied by compressor
-                
-                for line in lines {
-                    if line.contains("page size of") {
-                        // Format: "Mach Virtual Memory Statistics: (page size of 16384 bytes)"
-                        if let match = line.range(of: "\\d+", options: .regularExpression) {
-                            if let size = UInt64(line[match]) {
-                                pageSize = size
-                            }
-                        }
-                    } else if line.hasPrefix("Pages active:") {
-                        pagesActive = extractPageCount(line)
-                    } else if line.hasPrefix("Pages inactive:") {
-                        pagesInactive = extractPageCount(line)
-                    } else if line.hasPrefix("Pages speculative:") {
-                        pagesSpeculative = extractPageCount(line)
-                    } else if line.hasPrefix("Pages wired down:") {
-                        pagesWired = extractPageCount(line)
-                    } else if line.hasPrefix("Pages occupied by compressor:") {
-                        pagesCompressed = extractPageCount(line)
-                    }
+
+        // 2. Memory Usage using native Mach host_statistics64 (0 child processes)
+        if let (usedRAM, totalRAM, pagesActive, pagesWired, pagesCompressed, pageSize) = getNativeMemoryStats() {
+            let memoryUsageValue = Double(usedRAM) / Double(totalRAM)
+            let memoryUsedStringValue = ByteCountFormatter.string(fromByteCount: Int64(usedRAM), countStyle: .memory)
+            let memoryTotalStringValue = ByteCountFormatter.string(fromByteCount: Int64(totalRAM), countStyle: .memory)
+
+            Task {
+                await self.uiUpdater.batch {
+                    self.memoryUsage = memoryUsageValue
+                    self.memoryUsedString = memoryUsedStringValue
+                    self.memoryTotalString = memoryTotalStringValue
                 }
-                
-                let totalRAM = ProcessInfo.processInfo.physicalMemory
-                
-                // Activity Monitor "App Memory" ≈ Anonymous pages = Active + Inactive - Purgeable (approx)
-                // "Used Memory" ≈ App + Wired + Compressed
-                // More accurate: used = total - free - (purgeable is part of inactive)
-                // Let's match Activity Monitor's "Used Memory" more closely:
-                // Used = (Pages Active + Inactive + Speculative + Wired + Compressor) - Purgeable
-                // Or simpler: Used = Total - Free - Purgeable (cached that can be freed)
-                
-                let usedPages = pagesActive + pagesWired + pagesCompressed + pagesSpeculative
-                let usedRAM = usedPages * pageSize
-                
-                // For breakdown: App Memory ≈ Active + Inactive (anonymous portion) - hard to get exact
-                // Let's use: App = Active, Wired = Wired, Compressed = Compressor pages
-                // This is simpler and somewhat matches. For exact match, would need more complex parsing.
-                
-                // Refined: Activity Monitor shows:
-                // App Memory = internal (anonymous) pages = Active + Inactive that are anonymous
-                // Wired = wired
-                // Compressed = compressor occupied
-                // Since we can't easily separate anonymous vs file-backed in inactive, let's use:
-                // App = Active + (Inactive - Pages Purgeable) roughly
-                // But for simplicity in UI matching, let's just use direct values for now.
-                
-                let memoryUsageValue = Double(usedRAM) / Double(totalRAM)
-                let memoryUsedStringValue = ByteCountFormatter.string(fromByteCount: Int64(usedRAM), countStyle: .memory)
-                let memoryTotalStringValue = ByteCountFormatter.string(fromByteCount: Int64(totalRAM), countStyle: .memory)
-                
-                // Batch memory updates
-                Task {
-                    await self.uiUpdater.batch {
-                        self.memoryUsage = memoryUsageValue
-                        self.memoryUsedString = memoryUsedStringValue
-                        self.memoryTotalString = memoryTotalStringValue
-                    }
-                }
-                
-                // For detailed breakdown, use raw page counts
-                self.updateDetailedStats(
-                    pagesActive: pagesActive + pagesInactive + pagesSpeculative,
-                    pagesWired: pagesWired,
-                    pagesCompressed: pagesCompressed,
-                    pageSize: pageSize,
-                    totalRAM: totalRAM,
-                    includePressureAndSwap: shouldRefreshApplications
-                )
             }
-        } catch {
-            print("Memory Scan Error: \(error)")
+
+            self.updateDetailedStats(
+                pagesActive: pagesActive,
+                pagesWired: pagesWired,
+                pagesCompressed: pagesCompressed,
+                pageSize: pageSize,
+                totalRAM: totalRAM,
+                includePressureAndSwap: shouldRefreshApplications
+            )
         }
-        
+
         if shouldRefreshBatteryDetails {
             updateBatteryDetails()
         }
-        
-        // Network Speed - 使用 netstat 获取网络流量
-        // 找到 en0 接口中有实际流量的行（第7列 Ibytes > 0）
-        let netTask = Process()
-        netTask.launchPath = "/bin/bash"
-        netTask.arguments = ["-c", "netstat -ib | awk '/en0/ && $7 > 0 {print $7, $10; exit}'"]
-        
-        let netPipe = Pipe()
-        netTask.standardOutput = netPipe
-        
-        do {
-            try netTask.run()
-            let data = netPipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !output.isEmpty {
-                let parts = output.components(separatedBy: " ").filter { !$0.isEmpty }
-                if parts.count >= 2,
-                   let bytesIn = UInt64(parts[0]),
-                   let bytesOut = UInt64(parts[1]) {
-                    
-                    let now = Date()
-                    let timeDiff = now.timeIntervalSince(lastNetworkCheck)
-                    
-                    if timeDiff > 0 && lastBytesReceived > 0 {
-                        let downloadDelta = bytesIn > lastBytesReceived ? Double(bytesIn - lastBytesReceived) : 0
-                        let uploadDelta = bytesOut > lastBytesSent ? Double(bytesOut - lastBytesSent) : 0
-                        
-                        let downloadRate = downloadDelta / timeDiff
-                        let uploadRate = uploadDelta / timeDiff
-                        
-                        let totalDownloadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesIn), countStyle: .file)
-                        let totalUploadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesOut), countStyle: .file)
-                        
-                        // Batch network updates
-                        Task {
-                            await self.uiUpdater.batch {
-                                self.downloadSpeed = downloadRate
-                                self.uploadSpeed = uploadRate
-                                
-                                // Update Totals (Cumulative from netstat)
-                                self.totalDownload = totalDownloadStr
-                                self.totalUpload = totalUploadStr
-                                
-                                // Update History
-                                self.downloadSpeedHistory.removeFirst()
-                                self.downloadSpeedHistory.append(downloadRate)
-                                self.uploadSpeedHistory.removeFirst()
-                                self.uploadSpeedHistory.append(uploadRate)
-                            }
-                        }
+
+        // 3. Network Speed using native getifaddrs (0 child processes)
+        if let (bytesIn, bytesOut) = getNativeNetworkBytes() {
+            let now = Date()
+            let timeDiff = now.timeIntervalSince(lastNetworkCheck)
+
+            if timeDiff > 0 && lastBytesReceived > 0 {
+                let downloadDelta = bytesIn > lastBytesReceived ? Double(bytesIn - lastBytesReceived) : 0
+                let uploadDelta = bytesOut > lastBytesSent ? Double(bytesOut - lastBytesSent) : 0
+
+                let downloadRate = downloadDelta / timeDiff
+                let uploadRate = uploadDelta / timeDiff
+
+                let totalDownloadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesIn), countStyle: .file)
+                let totalUploadStr = ByteCountFormatter.string(fromByteCount: Int64(bytesOut), countStyle: .file)
+
+                Task {
+                    await self.uiUpdater.batch {
+                        self.downloadSpeed = downloadRate
+                        self.uploadSpeed = uploadRate
+                        self.totalDownload = totalDownloadStr
+                        self.totalUpload = totalUploadStr
+                        self.downloadSpeedHistory.removeFirst()
+                        self.downloadSpeedHistory.append(downloadRate)
+                        self.uploadSpeedHistory.removeFirst()
+                        self.uploadSpeedHistory.append(uploadRate)
                     }
-                    
-                    lastBytesReceived = bytesIn
-                    lastBytesSent = bytesOut
-                    lastNetworkCheck = now
                 }
             }
-        } catch {
-            print("Network Scan Error: \(error)")
+
+            lastBytesReceived = bytesIn
+            lastBytesSent = bytesOut
+            lastNetworkCheck = now
         }
         
         if shouldRefreshApplications {
@@ -505,41 +393,129 @@ class SystemMonitorService: ObservableObject {
         updateConnectionDuration()
     }
     
-    // Fetch WiFi Info using airport utility
+    // Native Mach CPU usage calculation
+    private func getNativeCpuUsage() -> Double? {
+        var cpuLoad = host_cpu_load_info()
+        var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let kerr = withUnsafeMutablePointer(to: &cpuLoad) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count)
+            }
+        }
+        guard kerr == KERN_SUCCESS else { return nil }
+        if !hasPrevCpu {
+            prevCpuLoadInfo = cpuLoad
+            hasPrevCpu = true
+            return 0.0
+        }
+        let userDiff = Double(cpuLoad.cpu_ticks.0 >= prevCpuLoadInfo.cpu_ticks.0 ? cpuLoad.cpu_ticks.0 - prevCpuLoadInfo.cpu_ticks.0 : 0)
+        let sysDiff  = Double(cpuLoad.cpu_ticks.1 >= prevCpuLoadInfo.cpu_ticks.1 ? cpuLoad.cpu_ticks.1 - prevCpuLoadInfo.cpu_ticks.1 : 0)
+        let idleDiff = Double(cpuLoad.cpu_ticks.2 >= prevCpuLoadInfo.cpu_ticks.2 ? cpuLoad.cpu_ticks.2 - prevCpuLoadInfo.cpu_ticks.2 : 0)
+        let niceDiff = Double(cpuLoad.cpu_ticks.3 >= prevCpuLoadInfo.cpu_ticks.3 ? cpuLoad.cpu_ticks.3 - prevCpuLoadInfo.cpu_ticks.3 : 0)
+        prevCpuLoadInfo = cpuLoad
+        let totalTicks = userDiff + sysDiff + idleDiff + niceDiff
+        if totalTicks > 0 {
+            return min(max((userDiff + sysDiff + niceDiff) / totalTicks, 0.0), 1.0)
+        }
+        return 0.0
+    }
+
+    // Native Mach memory statistics
+    private func getNativeMemoryStats() -> (usedRAM: UInt64, totalRAM: UInt64, pagesActive: UInt64, pagesWired: UInt64, pagesCompressed: UInt64, pageSize: UInt64)? {
+        var vmStats = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        let kerr = withUnsafeMutablePointer(to: &vmStats) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+            }
+        }
+        guard kerr == KERN_SUCCESS else { return nil }
+
+        let pageSize = UInt64(vm_kernel_page_size)
+        let pagesActive = UInt64(vmStats.active_count)
+        let pagesInactive = UInt64(vmStats.inactive_count)
+        let pagesSpeculative = UInt64(vmStats.speculative_count)
+        let pagesWired = UInt64(vmStats.wire_count)
+        let pagesCompressed = UInt64(vmStats.compressor_page_count)
+
+        let totalRAM = ProcessInfo.processInfo.physicalMemory
+        let usedPages = pagesActive + pagesWired + pagesCompressed + pagesSpeculative
+        let usedRAM = usedPages * pageSize
+
+        return (usedRAM, totalRAM, pagesActive + pagesInactive + pagesSpeculative, pagesWired, pagesCompressed, pageSize)
+    }
+
+    // Native getifaddrs network bytes
+    private func getNativeNetworkBytes() -> (bytesIn: UInt64, bytesOut: UInt64)? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        var totalBytesIn: UInt64 = 0
+        var totalBytesOut: UInt64 = 0
+
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let flags = Int32(ptr.pointee.ifa_flags)
+            guard (flags & (IFF_UP | IFF_RUNNING)) == (IFF_UP | IFF_RUNNING),
+                  (flags & IFF_LOOPBACK) == 0,
+                  let addr = ptr.pointee.ifa_addr,
+                  addr.pointee.sa_family == UInt8(AF_LINK) else { continue }
+
+            if let data = ptr.pointee.ifa_data {
+                let networkData = data.assumingMemoryBound(to: if_data.self).pointee
+                totalBytesIn += UInt64(networkData.ifi_ibytes)
+                totalBytesOut += UInt64(networkData.ifi_obytes)
+            }
+        }
+        return (totalBytesIn, totalBytesOut)
+    }
+
+    // Native IOKit power source description
+    private func getNativeBatteryInfo() -> (level: Double, isCharging: Bool, isActivelyCharging: Bool, timeRemaining: Int?)? {
+        guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef],
+              !sources.isEmpty else { return nil }
+
+        for source in sources {
+            if let desc = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] {
+                let current = desc[kIOPSCurrentCapacityKey as String] as? Int ?? 0
+                let max = desc[kIOPSMaxCapacityKey as String] as? Int ?? 100
+                let isCharging = (desc[kIOPSIsChargingKey as String] as? Bool) ?? false
+                let powerSourceState = desc[kIOPSPowerSourceStateKey as String] as? String
+                let isAC = powerSourceState == (kIOPSACPowerValue as String)
+                let timeToEmpty = desc[kIOPSTimeToEmptyKey as String] as? Int
+
+                let level = max > 0 ? Double(current) / Double(max) : 1.0
+                return (level, isAC || isCharging, isCharging, (timeToEmpty != nil && timeToEmpty! > 0) ? timeToEmpty : nil)
+            }
+        }
+        return nil
+    }
+
+    // Fetch WiFi Info using CoreWLAN
     private func fetchWiFiInfo() {
-        let task = Process()
-        task.launchPath = "/bin/bash"
-        // Use standard path for airport utility on macOS
-        task.arguments = ["-c", "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk -F': ' '/ SSID/ {print $2}'"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
-                Task {
-                    await uiUpdater.batch {
-                        self.wifiSSID = output
-                    }
-                }
-            } else {
-                 Task {
-                    await uiUpdater.batch {
-                        self.wifiSSID = LocalizationManager.shared.text(
-                            simplifiedChinese: "Wi-Fi 未连接",
-                            traditionalChinese: "Wi-Fi 未連線",
-                            english: "Wi-Fi Not Connected",
-                            japanese: "Wi-Fi未接続",
-                            korean: "Wi-Fi 연결 안 됨",
-                            russian: "Wi-Fi не подключён"
-                        )
-                    }
+        if let interface = CWWiFiClient.shared().interface(),
+           let ssid = interface.ssid(),
+           !ssid.isEmpty {
+            Task {
+                await uiUpdater.batch {
+                    self.wifiSSID = ssid
                 }
             }
-        } catch {
-             // Fallback
+            return
+        }
+
+        Task {
+            await uiUpdater.batch {
+                self.wifiSSID = LocalizationManager.shared.text(
+                    simplifiedChinese: "Wi-Fi 未连接",
+                    traditionalChinese: "Wi-Fi 未連線",
+                    english: "Wi-Fi Not Connected",
+                    japanese: "Wi-Fi未接続",
+                    korean: "Wi-Fi 연결 안 됨",
+                    russian: "Wi-Fi не подключён"
+                )
+            }
         }
     }
     
@@ -564,118 +540,60 @@ class SystemMonitorService: ObservableObject {
     }
     
     private func updateBatteryStatus() {
-        // Use pmset -g batt
-        let task = Process()
-        task.launchPath = "/usr/bin/pmset"
-        task.arguments = ["-g", "batt"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                // Example output:
-                // Now drawing from 'AC Power'
-                // -InternalBattery-0 (id=1234567)	98%; charging; 0:10 remaining present: true
-                
-                let lines = output.components(separatedBy: "\n")
-                if lines.count >= 2 {
-                    let statusLine = lines[1]
-                    
-                    // Parse Percentage
-                    var batteryLevelValue: Double = 1.0
-                    var isChargingValue = false
-                    var isActivelyCharging = false
-                    var remainingHours: Int?
-                    var remainingMinutes: Int?
-                    
-                    if let range = statusLine.range(of: "\\d+%", options: .regularExpression) {
-                        let percentString = String(statusLine[range]).dropLast()
-                        if let percent = Double(percentString) {
-                            batteryLevelValue = percent / 100.0
-                        }
-                    }
-                    
-                    // Parse Charging State
-                    if output.contains("AC Power") {
-                        isChargingValue = true
-                        if statusLine.contains("charging") {
-                            isActivelyCharging = true
-                        }
+        if let (level, isChargingValue, isActivelyCharging, timeRemainingMinutes) = getNativeBatteryInfo() {
+            Task {
+                await self.uiUpdater.batch {
+                    let loc = LocalizationManager.shared
+                    self.batteryLevel = level
+                    self.isCharging = isChargingValue
+                    if isChargingValue {
+                        self.batteryState = isActivelyCharging
+                            ? loc.text(
+                                simplifiedChinese: "正在充电",
+                                traditionalChinese: "正在充電",
+                                english: "Charging",
+                                japanese: "充電中",
+                                korean: "충전 중",
+                                russian: "Заряжается"
+                            )
+                            : loc.text(
+                                simplifiedChinese: "已连接电源",
+                                traditionalChinese: "已連接電源",
+                                english: "Power Connected",
+                                japanese: "電源に接続済み",
+                                korean: "전원 연결됨",
+                                russian: "Подключено питание"
+                            )
+                        self.batteryTimeRemaining = ""
                     } else {
-                        isChargingValue = false
-
-                        if let range = statusLine.range(of: "\\d+:\\d+ remaining", options: .regularExpression) {
-                            let duration = statusLine[range]
-                                .replacingOccurrences(of: " remaining", with: "")
-                                .split(separator: ":")
-                            if duration.count == 2,
-                               let hours = Int(duration[0]),
-                               let minutes = Int(duration[1]) {
-                                remainingHours = hours
-                                remainingMinutes = minutes
-                            }
-                        }
-                    }
-                    
-                    // Batch battery status update
-                    Task {
-                        await self.uiUpdater.batch {
-                            let loc = LocalizationManager.shared
-                            self.batteryLevel = batteryLevelValue
-                            self.isCharging = isChargingValue
-                            if isChargingValue {
-                                self.batteryState = isActivelyCharging
-                                    ? loc.text(
-                                        simplifiedChinese: "正在充电",
-                                        traditionalChinese: "正在充電",
-                                        english: "Charging",
-                                        japanese: "充電中",
-                                        korean: "충전 중",
-                                        russian: "Заряжается"
-                                    )
-                                    : loc.text(
-                                        simplifiedChinese: "已连接电源",
-                                        traditionalChinese: "已連接電源",
-                                        english: "Power Connected",
-                                        japanese: "電源に接続済み",
-                                        korean: "전원 연결됨",
-                                        russian: "Подключено питание"
-                                    )
-                                self.batteryTimeRemaining = ""
-                            } else {
-                                self.batteryState = loc.text(
-                                    simplifiedChinese: "使用电池",
-                                    traditionalChinese: "使用電池",
-                                    english: "On Battery",
-                                    japanese: "バッテリー使用中",
-                                    korean: "배터리 사용 중",
-                                    russian: "Питание от аккумулятора"
-                                )
-                                if let hours = remainingHours, let minutes = remainingMinutes {
-                                    self.batteryTimeRemaining = loc.text(
-                                        simplifiedChinese: "剩余 \(hours)小时 \(minutes)分钟",
-                                        traditionalChinese: "剩餘 \(hours)小時 \(minutes)分鐘",
-                                        english: "\(hours) hr \(minutes) min remaining",
-                                        japanese: "残り\(hours)時間\(minutes)分",
-                                        korean: "\(hours)시간 \(minutes)분 남음",
-                                        russian: "Осталось \(hours) ч \(minutes) мин"
-                                    )
-                                } else {
-                                    self.batteryTimeRemaining = ""
-                                }
-                            }
+                        self.batteryState = loc.text(
+                            simplifiedChinese: "使用电池",
+                            traditionalChinese: "使用電池",
+                            english: "On Battery",
+                            japanese: "バッテリー使用中",
+                            korean: "배터리 사용 중",
+                            russian: "Питание от аккумулятора"
+                        )
+                        if let mins = timeRemainingMinutes, mins > 0 {
+                            let hours = mins / 60
+                            let remMins = mins % 60
+                            self.batteryTimeRemaining = loc.text(
+                                simplifiedChinese: "剩余 \(hours)小时 \(remMins)分钟",
+                                traditionalChinese: "剩餘 \(hours)小時 \(remMins)分鐘",
+                                english: "\(hours) hr \(remMins) min remaining",
+                                japanese: "残り\(hours)時間\(remMins)分",
+                                korean: "\(hours)시간 \(remMins)분 남음",
+                                russian: "Осталось \(hours) ч \(remMins) мин"
+                            )
+                        } else {
+                            self.batteryTimeRemaining = ""
                         }
                     }
                 }
             }
-        } catch {
-            print("Battery Scan Error: \(error)")
+            return
         }
     }
-    
 
     func checkHighMemoryApps() {
         // 检查是否在暂停期间
@@ -683,10 +601,10 @@ class SystemMonitorService: ObservableObject {
             return  // 暂停期间不检测
         }
         
-        // Use ps to get pid and rss
+        // Use direct ps execution
         let task = Process()
-        task.launchPath = "/bin/bash"
-        task.arguments = ["-c", "ps -aceo pid,rss,comm"]
+        task.executableURL = URL(fileURLWithPath: "/bin/ps")
+        task.arguments = ["-aceo", "pid,rss,comm"]
         
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -694,6 +612,7 @@ class SystemMonitorService: ObservableObject {
         do {
             try task.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
             if let output = String(data: data, encoding: .utf8) {
                 let lines = output.components(separatedBy: "\n")
                 // Skip header (PID RSS COMM)
@@ -922,75 +841,38 @@ class SystemMonitorService: ObservableObject {
     }
     
     private func updateMemoryPressureAndSwap() {
-        // Memory Pressure
-        let pressureTask = Process()
-        pressureTask.launchPath = "/usr/bin/memory_pressure"
-        pressureTask.arguments = ["-Q"]
-        
-        let pressurePipe = Pipe()
-        pressureTask.standardOutput = pressurePipe
-        
-        DispatchQueue.global(qos: .background).async {
-            do {
-                try pressureTask.run()
-                let data = pressurePipe.fileHandleForReading.readDataToEndOfFile()
-                if let output = String(data: data, encoding: .utf8) {
-                    // Output: "System-wide memory free percentage: 48%"
-                    if let range = output.range(of: "\\d+%", options: .regularExpression) {
-                        let percentString = String(output[range]).dropLast()
-                        if let freePercent = Double(percentString) {
-                            let memoryPressureValue = (100.0 - freePercent) / 100.0
-                            
-                            // Batch pressure update
-                            Task {
-                                await self.uiUpdater.batch {
-                                    self.memoryPressure = memoryPressureValue
-                                }
-                            }
-                        }
-                    }
+        // Swap Usage via native sysctlbyname (0 child processes)
+        var swap = xsw_usage()
+        var size = MemoryLayout<xsw_usage>.size
+        if sysctlbyname("vm.swapusage", &swap, &size, nil, 0) == 0 {
+            let usedStr = ByteCountFormatter.string(fromByteCount: Int64(swap.xsu_used), countStyle: .memory)
+            let totalStr = ByteCountFormatter.string(fromByteCount: Int64(swap.xsu_total), countStyle: .memory)
+            Task {
+                await self.uiUpdater.batch {
+                    self.memorySwapUsed = usedStr
+                    self.memorySwapTotal = totalStr
                 }
-            } catch {
-                print("Memory Pressure Error: \(error)")
             }
         }
-        
-        // Swap Usage
-        // sysctl vm.swapusage
-        let swapTask = Process()
-        swapTask.launchPath = "/usr/sbin/sysctl"
-        swapTask.arguments = ["vm.swapusage"]
-        
-        let swapPipe = Pipe()
-        swapTask.standardOutput = swapPipe
-        
-        DispatchQueue.global(qos: .background).async {
-            do {
-                try swapTask.run()
-                let data = swapPipe.fileHandleForReading.readDataToEndOfFile()
-                if let output = String(data: data, encoding: .utf8) {
-                    // vm.swapusage: total = 5120.00M  used = 4426.56M  free = 693.44M  (encrypted)
-                    let components = output.components(separatedBy: " ")
-                    var usedStr = ""
-                    
-                    for (index, comp) in components.enumerated() {
-                        if comp == "used" && index + 2 < components.count {
-                             // index+1 is "=", index+2 is value
-                             usedStr = components[index + 2]
-                        }
-                    }
-                    
-                    // Batch swap update
-                    if !usedStr.isEmpty {
-                        Task {
-                            await self.uiUpdater.batch {
-                                self.memorySwapUsed = usedStr
-                            }
-                        }
+
+        // Memory Pressure calculation via Mach VM info
+        var vmStats = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        let kerr = withUnsafeMutablePointer(to: &vmStats) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+            }
+        }
+        if kerr == KERN_SUCCESS {
+            let total = Double(vmStats.active_count + vmStats.inactive_count + vmStats.speculative_count + vmStats.wire_count + vmStats.free_count)
+            if total > 0 {
+                let free = Double(vmStats.free_count + vmStats.inactive_count)
+                let pressure = max(0.0, min(1.0, 1.0 - (free / total)))
+                Task {
+                    await self.uiUpdater.batch {
+                        self.memoryPressure = pressure
                     }
                 }
-            } catch {
-                print("Swap Usage Error: \(error)")
             }
         }
     }
@@ -1078,17 +960,9 @@ class SystemMonitorService: ObservableObject {
                          }
                      }
                  }
-             } catch {
-                 print("Battery Detail Error: \(error)")
-             }
+            } catch {
+                print("Battery Detail Error: \(error)")
+            }
+        }
     }
-    
-    func formatSpeed(_ bytes: Double) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        formatter.zeroPadsFractionDigits = true
-        return formatter.string(fromByteCount: Int64(bytes)) + "/s"
-    }
-}
 }
