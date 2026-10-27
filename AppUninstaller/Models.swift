@@ -14,6 +14,11 @@ enum FileType: String, CaseIterable, Identifiable, Codable {
     case launchAgents = "启动代理"
     case crashReports = "崩溃报告"
     case developer = "开发数据"
+    case httpStorages = "网络存储"
+    case webKit = "网页数据"
+    case applicationScripts = "应用脚本"
+    case privilegedHelpers = "特权助手"
+    case receipts = "安装收据"
     
     var id: String { rawValue }
     
@@ -30,6 +35,11 @@ enum FileType: String, CaseIterable, Identifiable, Codable {
         case .launchAgents: return "bolt.fill"
         case .crashReports: return "exclamationmark.triangle.fill"
         case .developer: return "hammer.fill"
+        case .httpStorages: return "globe"
+        case .webKit: return "safari"
+        case .applicationScripts: return "applescript"
+        case .privilegedHelpers: return "shield.lefthalf.filled"
+        case .receipts: return "doc.text.magnifyingglass"
         }
     }
     
@@ -46,6 +56,11 @@ enum FileType: String, CaseIterable, Identifiable, Codable {
         case .launchAgents: return NSColor.systemRed
         case .crashReports: return NSColor.systemGray
         case .developer: return NSColor.systemBrown
+        case .httpStorages: return NSColor.systemCyan
+        case .webKit: return NSColor.systemBlue
+        case .applicationScripts: return NSColor.systemGreen
+        case .privilegedHelpers: return NSColor.systemRed
+        case .receipts: return NSColor.systemGray
         }
     }
 }

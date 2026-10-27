@@ -38,6 +38,14 @@ class ResidualFileScanner {
             residualFiles.append(contentsOf: self.scanCrashReports(appName: appName, bundleId: bundleId))
             residualFiles.append(contentsOf: self.scanDeveloper(appName: appName, bundleId: bundleId))
             residualFiles.append(contentsOf: self.scanKnownApplicationData(bundleId: bundleId))
+            // AppCleaner 等价补全：以下位置原实现未覆盖
+            residualFiles.append(contentsOf: self.scanHTTPStorages(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanWebKit(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanApplicationScripts(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanByHostPreferences(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanSystemWide(appName: appName, bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanPrivilegedHelpers(bundleId: bundleId))
+            residualFiles.append(contentsOf: self.scanPackageReceipts(bundleId: bundleId))
             
             var seenPaths = Set<String>()
             return residualFiles.filter {
@@ -315,6 +323,132 @@ class ResidualFileScanner {
         }
     }
     
+    // MARK: - AppCleaner 等价补全扫描
+    //
+    // AppCleaner 除了 ~/Library 下的常规目录，还会扫描 HTTPStorages、WebKit、
+    // Application Scripts、ByHost 偏好、系统级 /Library 各处、特权助手以及 pkg 收据。
+    // 以下实现按同样的路径集合做标识匹配，保证卸载后不留残渣。
+
+    /// 统一的标识匹配：优先 bundle id，其次精确应用名。
+    /// 只做「等于 / 前缀 / 后缀」判断，避免 com.foo.app 误伤 com.foo.app2。
+    private func matchesResidual(_ candidate: String, appName: String, bundleId: String?) -> Bool {
+        let lower = candidate.lowercased()
+        guard !lower.isEmpty else { return false }
+
+        if lower == appName.lowercased() { return true }
+
+        guard let bid = bundleId?.lowercased(), !bid.isEmpty else { return false }
+        if lower == bid { return true }
+        if lower.hasPrefix(bid + ".") { return true }      // com.vendor.app / com.vendor.app.helper
+        if lower.hasSuffix("." + bid) { return true }      // TeamID.com.vendor.app
+        return false
+    }
+
+    /// 精确路径探测
+    private func probePath(_ url: URL, type: FileType) -> [ResidualFile] {
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        return [ResidualFile(path: url, type: type, size: calculateSize(at: url))]
+    }
+
+    /// 列出目录内容（失败返回空数组，不抛错）
+    private func listDirectory(_ url: URL) -> [URL] {
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        return (try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+    }
+
+    // MARK: 网络存储（HTTPStorages + binarycookies）
+    private func scanHTTPStorages(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId?.lowercased(), !bid.isEmpty else { return [] }
+        let dir = homeDirectory.appendingPathComponent("Library/HTTPStorages")
+        var files: [ResidualFile] = []
+
+        for url in listDirectory(dir) {
+            let stem = url.deletingPathExtension().lastPathComponent.lowercased()
+            guard stem == bid || stem.hasPrefix(bid + ".") else { continue }
+            files.append(ResidualFile(path: url, type: .httpStorages, size: calculateSize(at: url)))
+        }
+        return files
+    }
+
+    // MARK: WebKit 网页数据（localStorage / IndexedDB 常驻在此）
+    private func scanWebKit(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId, !bid.isEmpty else { return [] }
+        let dir = homeDirectory.appendingPathComponent("Library/WebKit/\(bid)")
+        return probePath(dir, type: .webKit)
+    }
+
+    // MARK: 应用脚本（AppleScript / 沙盒化脚本目录）
+    private func scanApplicationScripts(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId, !bid.isEmpty else { return [] }
+        let dir = homeDirectory.appendingPathComponent("Library/Application Scripts/\(bid)")
+        return probePath(dir, type: .applicationScripts)
+    }
+
+    // MARK: ByHost 偏好（~/Library/Preferences/ByHost/<bid>.<UUID>.plist）
+    private func scanByHostPreferences(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId?.lowercased(), !bid.isEmpty else { return [] }
+        let dir = homeDirectory.appendingPathComponent("Library/Preferences/ByHost")
+        var files: [ResidualFile] = []
+
+        for url in listDirectory(dir) {
+            let stem = url.deletingPathExtension().lastPathComponent.lowercased()
+            guard stem == bid || stem.hasPrefix(bid + ".") else { continue }
+            files.append(ResidualFile(path: url, type: .preferences, size: calculateSize(at: url)))
+        }
+        return files
+    }
+
+    // MARK: 系统级 /Library（需要管理员权限删除，FileRemover 会自动提权）
+    private func scanSystemWide(appName: String, bundleId: String?) -> [ResidualFile] {
+        var files: [ResidualFile] = []
+        let libraryRoot = URL(fileURLWithPath: "/Library")
+
+        let sections: [(String, FileType)] = [
+            ("Application Support", .applicationSupport),
+            ("Caches", .caches),
+            ("Logs", .logs),
+            ("LaunchAgents", .launchAgents),
+            ("LaunchDaemons", .launchAgents)
+        ]
+
+        for (sub, type) in sections {
+            for url in listDirectory(libraryRoot.appendingPathComponent(sub)) {
+                let fileName = url.lastPathComponent.lowercased()
+                let stem = url.deletingPathExtension().lastPathComponent.lowercased()
+                if matchesResidual(fileName, appName: appName, bundleId: bundleId)
+                    || matchesResidual(stem, appName: appName, bundleId: bundleId) {
+                    files.append(ResidualFile(path: url, type: type, size: calculateSize(at: url)))
+                }
+            }
+        }
+
+        if let bid = bundleId, !bid.isEmpty {
+            files.append(contentsOf: probePath(
+                libraryRoot.appendingPathComponent("Preferences/\(bid).plist"),
+                type: .preferences
+            ))
+        }
+        return files
+    }
+
+    // MARK: 特权助手（/Library/PrivilegedHelperTools，形如 TeamID.bundleid.helper）
+    private func scanPrivilegedHelpers(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId?.lowercased(), !bid.isEmpty else { return [] }
+        let dir = URL(fileURLWithPath: "/Library/PrivilegedHelperTools")
+        return listDirectory(dir)
+            .filter { $0.lastPathComponent.lowercased().contains(bid) }
+            .map { ResidualFile(path: $0, type: .privilegedHelpers, size: calculateSize(at: $0)) }
+    }
+
+    // MARK: 安装收据（/private/var/db/receipts，pkg 安装残留）
+    private func scanPackageReceipts(bundleId: String?) -> [ResidualFile] {
+        guard let bid = bundleId?.lowercased(), !bid.isEmpty else { return [] }
+        let dir = URL(fileURLWithPath: "/private/var/db/receipts")
+        return listDirectory(dir)
+            .filter { $0.lastPathComponent.lowercased().hasPrefix(bid) }
+            .map { ResidualFile(path: $0, type: .receipts, size: calculateSize(at: $0)) }
+    }
+
     // MARK: - 计算大小
     private func calculateSize(at url: URL) -> Int64 {
         var totalSize: Int64 = 0

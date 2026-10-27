@@ -452,6 +452,16 @@ struct FileTypeSection: View {
     korean: "개발자 데이터",
     russian: "Данные разработчика:"
 )
+        case .httpStorages:
+            return loc.text(simplifiedChinese: "网络存储", traditionalChinese: "網路儲存", english: "HTTP Storages", japanese: "HTTPストレージ", korean: "HTTP 저장소", russian: "HTTP-хранилища")
+        case .webKit:
+            return loc.text(simplifiedChinese: "网页数据", traditionalChinese: "網頁資料", english: "WebKit Data", japanese: "WebKitデータ", korean: "WebKit 데이터", russian: "Данные WebKit")
+        case .applicationScripts:
+            return loc.text(simplifiedChinese: "应用脚本", traditionalChinese: "應用程式腳本", english: "Application Scripts", japanese: "アプリケーションスクリプト", korean: "응용 프로그램 스크립트", russian: "Сценарии приложения")
+        case .privilegedHelpers:
+            return loc.text(simplifiedChinese: "特权助手", traditionalChinese: "特權輔助程式", english: "Privileged Helpers", japanese: "特権ヘルパー", korean: "권한 도우미", russian: "Привилегированные помощники")
+        case .receipts:
+            return loc.text(simplifiedChinese: "安装收据", traditionalChinese: "安裝收據", english: "Install Receipts", japanese: "インストールレシート", korean: "설치 영수증", russian: "Квитанции установки")
         }
     }
     
